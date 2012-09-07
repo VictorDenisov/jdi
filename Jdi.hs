@@ -30,17 +30,15 @@ data Configuration = Configuration
     }
 
 getPacketIdCounter :: Monad m => VirtualMachine m PacketId
-getPacketIdCounter = liftM packetIdCounter get
+getPacketIdCounter = packetIdCounter `liftM` get
 
 incPacketIdCounter :: Monad m => VirtualMachine m ()
 incPacketIdCounter = do
     s <- get
     put $ s { packetIdCounter = (packetIdCounter s) + 1 }
- 
-setIdSizes :: Monad m => IdSizes -> VirtualMachine m ()
-setIdSizes iss = do
-    s <- get
-    put $ s { idSizesConf = iss }
+
+getVmHandle :: Monad m => VirtualMachine m Handle
+getVmHandle = vmHandle `liftM` get
 
 setVmHandle :: Monad m => Handle -> VirtualMachine m ()
 setVmHandle h = do
@@ -49,6 +47,12 @@ setVmHandle h = do
 
 getIdSizes :: Monad m => VirtualMachine m IdSizes
 getIdSizes = liftM idSizesConf get
+
+setIdSizes :: Monad m => IdSizes -> VirtualMachine m ()
+setIdSizes iss = do
+    s <- get
+    put $ s { idSizesConf = iss }
+
 -- }}}
 
 runVirtualMachine :: MonadIO m =>
@@ -57,11 +61,17 @@ runVirtualMachine host port vm = do
     h <- liftIO $ connectTo host port
     liftIO $ hSetBinaryMode h True
     result <- runErrorT $ runStateT
-                            ((lift (handshake h)) >> (vm >> releaseResources))
+                            ((lift (handshake h)) >> (preflight >> vm >> releaseResources))
                             (initialConfiguration h)
     case result of
         Right ((), state) -> return ()
         Left s -> liftIO $ putStrLn $ "Execution failed with message: " ++ s
+
+preflight :: MonadIO m => VirtualMachine m ()
+preflight = do
+    h <- getVmHandle
+    liftIO $ waitVmStartEvent h
+    return ()
 
 releaseResources :: MonadIO m => VirtualMachine m ()
 releaseResources = do
@@ -132,4 +142,14 @@ sendPacket :: Handle -> Packet -> IO ()
 sendPacket h p = do
     B.hPut h $ runPut $ putPacket p
     hFlush h
+
+name :: MonadIO m => VirtualMachine m String
+name = do
+    h <- getVmHandle
+    cntr <- getPacketIdCounter
+    liftIO $ sendPacket h $ versionCommand cntr
+    idsizes <- getIdSizes
+    p <- liftIO $ waitReply h idsizes $ \_ -> parseVersionReply idsizes
+    return $ vmName $ dat p
+
 -- vim: foldmethod=marker foldmarker={{{,}}}

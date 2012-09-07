@@ -6,4 +6,5 @@ import Control.Monad.Trans (liftIO, lift)
 
 main = do
     runVirtualMachine "localhost" (PortNumber 2044) $ do
-        liftIO $ putStrLn "Processing virtual ----- machine"
+        nm <- name
+        liftIO $ putStrLn $ "Processing virtual ----- machine with name: " ++ nm
