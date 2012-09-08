@@ -31,6 +31,9 @@ data Configuration = Configuration
     , eventQueue      :: S.Seq EventSet
     }
 
+yieldPacketIdCounter :: Monad m => VirtualMachine m PacketId
+yieldPacketIdCounter = incPacketIdCounter >> getPacketIdCounter
+
 getPacketIdCounter :: Monad m => VirtualMachine m PacketId
 getPacketIdCounter = packetIdCounter `liftM` get
 
@@ -100,8 +103,7 @@ preflight = do
 askIdSizes :: MonadIO m => VirtualMachine m ()
 askIdSizes = do
     h <- getVmHandle
-    cntr <- getPacketIdCounter
-    incPacketIdCounter
+    cntr <- yieldPacketIdCounter
     liftIO $ sendPacket h $ idSizesCommand cntr
     let emptyIdSizes = (IdSizes 0 0 0 0 0)
     let r = liftIO $ waitReply h emptyIdSizes $ \_ -> parseIdSizesReply emptyIdSizes
@@ -122,8 +124,7 @@ initialConfiguration h = Configuration Nothing 0 h M.empty S.empty
 name :: MonadIO m => VirtualMachine m String
 name = do
     h <- getVmHandle
-    cntr <- getPacketIdCounter
-    incPacketIdCounter
+    cntr <- yieldPacketIdCounter
     idsizes <- getIdSizes
     liftIO $ sendPacket h $ versionCommand cntr
     p <- liftIO $ waitReply h idsizes $ \_ -> parseVersionReply idsizes
@@ -143,8 +144,7 @@ removeEvent = do
 resume :: MonadIO m => VirtualMachine m ()
 resume = do
     h <- getVmHandle
-    cntr <- getPacketIdCounter
-    incPacketIdCounter
+    cntr <- yieldPacketIdCounter
     idsizes <- getIdSizes
     liftIO $ sendPacket h $ resumeVmCommand cntr
     r <- liftIO $ waitReply h idsizes $ \_ -> parseEmptyData idsizes
@@ -159,8 +159,7 @@ enable :: MonadIO m => EventRequest -> VirtualMachine m EventRequest
 enable (ClassPrepareRequest (EventRequest suspendPolicy)) = do
     h <- getVmHandle
     idsizes <- getIdSizes
-    cntr <- getPacketIdCounter
-    incPacketIdCounter
+    cntr <- yieldPacketIdCounter
     liftIO $ sendPacket h $ eventSetRequest cntr ClassPrepare suspendPolicy []
     let r = liftIO $ waitReply h idsizes $ \_ -> parseEventSetRequestReply idsizes
     (EventRequestSetReply requestId) <- dat `liftM` r

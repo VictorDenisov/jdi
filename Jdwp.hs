@@ -538,8 +538,7 @@ receivePacket :: Handle -> IdSizes -> ReplyDataParser -> IO Packet
 receivePacket h idsizes f = do
     inputAvailable <- hWaitForInput h (-1)
     if inputAvailable
-    then do putStrLn "Receiving a packet..."
-            lengthString <- B.hGet h 4
+    then do lengthString <- B.hGet h 4
             let l = (fromIntegral $ runGet (parseInt) lengthString) - 4
             reminder <- B.hGet h l
             let p = runGet (parsePacket idsizes f) (lengthString `B.append` reminder)
