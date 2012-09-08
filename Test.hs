@@ -10,3 +10,11 @@ main = do
         liftIO $ putStrLn $ "Processing virtual ----- machine with name: " ++ nm
         es <- removeEvent
         liftIO $ putStrLn $ show es
+        rd <- enable createClassPrepareRequest
+        liftIO $ putStrLn $ show rd
+        resume
+        es <- removeEvent
+        liftIO $ putStrLn $ show es
+        resume
+        es <- removeEvent
+        liftIO $ putStrLn $ show es

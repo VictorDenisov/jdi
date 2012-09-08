@@ -91,7 +91,19 @@ preflight = do
     h <- getVmHandle
     EventSetData vmStartEventSet <- dat `liftM` (liftIO $ waitVmStartEvent h)
     addToQueue vmStartEventSet
-    return ()
+    askIdSizes
+
+askIdSizes :: MonadIO m => VirtualMachine m ()
+askIdSizes = do
+    h <- getVmHandle
+    cntr <- getPacketIdCounter
+    incPacketIdCounter
+    idsizes <- getIdSizes
+    liftIO $ sendPacket h idsizes $ idSizesCommand cntr
+    let r = liftIO $ waitReply h idsizes $ \_ -> parseIdSizesReply idsizes
+    (IdSizesReply newIdSizes) <- dat `liftM` r
+    setIdSizes newIdSizes
+
 
 releaseResources :: MonadIO m => VirtualMachine m ()
 releaseResources = do
@@ -101,12 +113,15 @@ releaseResources = do
 initialConfiguration :: Handle -> Configuration
 initialConfiguration h = Configuration (IdSizes 0 0 0 0 0) 0 h M.empty S.empty
 
+--- Functions from official interface
+
 name :: MonadIO m => VirtualMachine m String
 name = do
     h <- getVmHandle
     cntr <- getPacketIdCounter
-    liftIO $ sendPacket h $ versionCommand cntr
+    incPacketIdCounter
     idsizes <- getIdSizes
+    liftIO $ sendPacket h idsizes $ versionCommand cntr
     p <- liftIO $ waitReply h idsizes $ \_ -> parseVersionReply idsizes
     return $ vmName $ dat p
 
@@ -121,5 +136,33 @@ removeEvent = do
         return e
     else takeFromQueue
 
+resume :: MonadIO m => VirtualMachine m ()
+resume = do
+    h <- getVmHandle
+    cntr <- getPacketIdCounter
+    incPacketIdCounter
+    idsizes <- getIdSizes
+    liftIO $ sendPacket h idsizes $ resumeVmCommand cntr
+    r <- liftIO $ waitReply h idsizes $ \_ -> parseEmptyData idsizes
+    return ()
+
+data EventRequest = ClassPrepareRequest EventRequest
+                  | EventRequest SuspendPolicy
+                  | RequestDescriptor EventKind JavaInt
+                    deriving (Show, Eq)
+
+enable :: MonadIO m => EventRequest -> VirtualMachine m EventRequest
+enable (ClassPrepareRequest (EventRequest suspendPolicy)) = do
+    h <- getVmHandle
+    idsizes <- getIdSizes
+    cntr <- getPacketIdCounter
+    incPacketIdCounter
+    liftIO $ sendPacket h idsizes $ eventSetRequest cntr ClassPrepare suspendPolicy []
+    let r = liftIO $ waitReply h idsizes $ \_ -> parseEventSetRequestReply idsizes
+    (EventRequestSetReply requestId) <- dat `liftM` r
+    return $ RequestDescriptor ClassPrepare requestId
+
+createClassPrepareRequest :: EventRequest
+createClassPrepareRequest = ClassPrepareRequest $ EventRequest SuspendAll
 
 -- vim: foldmethod=marker foldmarker={{{,}}}
