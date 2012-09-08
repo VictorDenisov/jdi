@@ -99,7 +99,7 @@ askIdSizes = do
     cntr <- getPacketIdCounter
     incPacketIdCounter
     idsizes <- getIdSizes
-    liftIO $ sendPacket h idsizes $ idSizesCommand cntr
+    liftIO $ sendPacket h $ idSizesCommand cntr
     let r = liftIO $ waitReply h idsizes $ \_ -> parseIdSizesReply idsizes
     (IdSizesReply newIdSizes) <- dat `liftM` r
     setIdSizes newIdSizes
@@ -121,7 +121,7 @@ name = do
     cntr <- getPacketIdCounter
     incPacketIdCounter
     idsizes <- getIdSizes
-    liftIO $ sendPacket h idsizes $ versionCommand cntr
+    liftIO $ sendPacket h $ versionCommand cntr
     p <- liftIO $ waitReply h idsizes $ \_ -> parseVersionReply idsizes
     return $ vmName $ dat p
 
@@ -142,7 +142,7 @@ resume = do
     cntr <- getPacketIdCounter
     incPacketIdCounter
     idsizes <- getIdSizes
-    liftIO $ sendPacket h idsizes $ resumeVmCommand cntr
+    liftIO $ sendPacket h $ resumeVmCommand cntr
     r <- liftIO $ waitReply h idsizes $ \_ -> parseEmptyData idsizes
     return ()
 
@@ -157,7 +157,7 @@ enable (ClassPrepareRequest (EventRequest suspendPolicy)) = do
     idsizes <- getIdSizes
     cntr <- getPacketIdCounter
     incPacketIdCounter
-    liftIO $ sendPacket h idsizes $ eventSetRequest cntr ClassPrepare suspendPolicy []
+    liftIO $ sendPacket h $ eventSetRequest cntr ClassPrepare suspendPolicy []
     let r = liftIO $ waitReply h idsizes $ \_ -> parseEventSetRequestReply idsizes
     (EventRequestSetReply requestId) <- dat `liftM` r
     return $ RequestDescriptor ClassPrepare requestId

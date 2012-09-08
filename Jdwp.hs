@@ -64,21 +64,21 @@ parseList l p = do
     xs <- parseList (l - 1) p
     return (x:xs)
 
-putPacket :: IdSizes -> Packet -> Put
-putPacket idsizes (CommandPacket l i f cs c d) = do
+putPacket :: Packet -> Put
+putPacket (CommandPacket l i f cs c d) = do
     put l
     put i
     put f
     put cs
     put c
-    putPacketData idsizes d
+    putPacketData d
 
-putPacket idsizes (ReplyPacket l i f e d) = do
+putPacket (ReplyPacket l i f e d) = do
     put l
     put i
     put f
     put e
-    putPacketData idsizes d
+    putPacketData d
 -- }}}
 ---------------General types section
 -- {{{
@@ -87,13 +87,13 @@ type JavaInt             = Word32
 type JavaLong            = Word64
 type JavaString          = String
 type JavaBoolean         = Bool
-type JavaFieldId         = Word64
-type JavaMethodId        = Word64
-type JavaObjectId        = Word64
-type JavaReferenceTypeId = Word64
-type JavaFrameId         = Word64
 type JavaThreadId        = JavaObjectId
 type JavaClassId         = JavaReferenceTypeId
+data JavaFieldId      = JavaFieldId JavaInt Word64 deriving (Show, Eq)
+data JavaMethodId     = JavaMethodId JavaInt Word64 deriving (Show, Eq)
+data JavaObjectId     = JavaObjectId JavaInt Word64 deriving (Show, Eq)
+data JavaReferenceTypeId = JavaReferenceTypeId JavaInt Word64 deriving (Show, Eq) -- size value
+data JavaFrameId         = JavaFrameId JavaInt Word64 deriving (Show, Eq)
 
 data JavaLocation = JavaLocation
                   { typeTag :: TypeTag
@@ -128,60 +128,75 @@ putString s = do
     put $ ((fromIntegral (length s)) :: Word32)
     mapM_ put (B.unpack $ B8.pack $ s)
 
-putLocation :: IdSizes -> JavaLocation -> Put
-putLocation idsizes (JavaLocation typeTag classId methodId index) = do
+putLocation :: JavaLocation -> Put
+putLocation (JavaLocation typeTag classId methodId index) = do
     putTypeTag  typeTag
-    putClassId (referenceTypeIdSize idsizes) classId
-    putMethodId (methodIdSize idsizes) methodId
+    putClassId classId
+    putMethodId methodId
     put index
 
-putReferenceTypeId :: JavaInt -> JavaReferenceTypeId -> Put
-putReferenceTypeId 1 v = put ((fromIntegral v) :: Word8)
-putReferenceTypeId 2 v = put ((fromIntegral v) :: Word16)
-putReferenceTypeId 4 v = put ((fromIntegral v) :: Word32)
-putReferenceTypeId 8 v = put ((fromIntegral v) :: Word64)
-putReferenceTypeId s _ = error $ "Currently we can not process values of this size: " ++ (show s)
+putDynamicSizedValue :: JavaInt -> Word64 -> Put
+putDynamicSizedValue s v = case s of
+    1 -> put ((fromIntegral v) :: Word8)
+    2 -> put ((fromIntegral v) :: Word16)
+    4 -> put ((fromIntegral v) :: Word32)
+    8 -> put ((fromIntegral v) :: Word64)
+    _ -> error $ "Currently we can not process values of this size: " ++ (show s)
+
+parseDynamicSizedValue :: JavaInt -> Get Word64
+parseDynamicSizedValue 1 = fromIntegral <$> (get :: Get Word8)
+parseDynamicSizedValue 2 = fromIntegral <$> (get :: Get Word16)
+parseDynamicSizedValue 4 = fromIntegral <$> (get :: Get Word32)
+parseDynamicSizedValue 8 = fromIntegral <$> (get :: Get Word64)
+parseDynamicSizedValue s = error $ "Currently we can not process values of this size: " ++ (show s)
+
+--- fieldId
+putFieldId :: JavaFieldId -> Put
+putFieldId (JavaFieldId size v) = putDynamicSizedValue size v
+
+parseFieldId :: JavaInt -> Get JavaFieldId
+parseFieldId s = JavaFieldId s <$> parseDynamicSizedValue s
+
+--- methodId
+putMethodId :: JavaMethodId -> Put
+putMethodId (JavaMethodId size v) = putDynamicSizedValue size v
+
+parseMethodId :: JavaInt -> Get JavaMethodId
+parseMethodId s = JavaMethodId s <$> parseDynamicSizedValue s
+
+--- objectId
+putObjectId :: JavaObjectId -> Put
+putObjectId (JavaObjectId size v) = putDynamicSizedValue size v
+
+parseObjectId :: JavaInt -> Get JavaObjectId
+parseObjectId s = JavaObjectId s <$> parseDynamicSizedValue s
+
+--- referenceTypeId
+putReferenceTypeId :: JavaReferenceTypeId -> Put
+putReferenceTypeId (JavaReferenceTypeId size v) = putDynamicSizedValue size v
 
 parseReferenceTypeId :: JavaInt -> Get JavaReferenceTypeId
-parseReferenceTypeId 1 = fromIntegral <$> (get :: Get Word8)
-parseReferenceTypeId 2 = fromIntegral <$> (get :: Get Word16)
-parseReferenceTypeId 4 = fromIntegral <$> (get :: Get Word32)
-parseReferenceTypeId 8 = fromIntegral <$> (get :: Get Word64)
-parseReferenceTypeId s = error $ "Currently we can not process values of this size: " ++ (show s)
+parseReferenceTypeId s = JavaReferenceTypeId s <$> parseDynamicSizedValue s
 
-putThreadId :: JavaInt -> JavaThreadId -> Put
-putThreadId = putReferenceTypeId
+--- frameId
+putFrameId :: JavaFrameId -> Put
+putFrameId (JavaFrameId size v) = putDynamicSizedValue size v
+
+parseFrameId :: JavaInt -> Get JavaFrameId
+parseFrameId s = JavaFrameId s <$> parseDynamicSizedValue s
+
+----------
+putThreadId :: JavaThreadId -> Put
+putThreadId = putObjectId
 
 parseThreadId :: JavaInt -> Get JavaThreadId
-parseThreadId 1 = fromIntegral <$> (get :: Get Word8)
-parseThreadId 2 = fromIntegral <$> (get :: Get Word16)
-parseThreadId 4 = fromIntegral <$> (get :: Get Word32)
-parseThreadId 8 = fromIntegral <$> (get :: Get Word64)
-parseThreadId s = error $ "Currently we can not process values of this size: " ++ (show s)
+parseThreadId = parseObjectId
 
-putClassId :: JavaInt -> JavaClassId -> Put
+putClassId :: JavaClassId -> Put
 putClassId = putReferenceTypeId
 
 parseClassId :: JavaInt -> Get JavaClassId
 parseClassId = parseReferenceTypeId
-
-putMethodId :: JavaInt -> JavaMethodId -> Put
-putMethodId = putReferenceTypeId
-
-parseMethodId :: JavaInt -> Get JavaMethodId
-parseMethodId = parseReferenceTypeId
-
-putFieldId :: JavaInt -> JavaFieldId -> Put
-putFieldId = putReferenceTypeId
-
-parseFieldId :: JavaInt -> Get JavaFieldId
-parseFieldId = parseReferenceTypeId
-
-putObjectId :: JavaInt -> JavaObjectId -> Put
-putObjectId = putReferenceTypeId
-
-parseObjectId :: JavaInt -> Get JavaObjectId
-parseObjectId = parseReferenceTypeId
 -- }}}
 -------PacketData parsing section---------------------
 -- {{{
@@ -387,49 +402,49 @@ parseTypeTag :: Get TypeTag
 parseTypeTag = typeTagFromNumber <$> (get :: Get JavaByte)
 
 --- EventModifier
-putEventModifier :: IdSizes -> EventModifier -> Put
-putEventModifier idsizes (Count count) = putByte 1 >> put count
-putEventModifier idsizes (Conditional exprId) = putByte 2 >> put exprId
-putEventModifier idsizes (ThreadOnly threadId)       = putByte 3 >> put threadId
-putEventModifier idsizes (ClassOnly clazz)           = putByte 4 >> put clazz
-putEventModifier idsizes (ClassMatch classPattern)   = putByte 5 >> putString classPattern
-putEventModifier idsizes (ClassExclude classPattern) = putByte 6 >> putString classPattern
-putEventModifier idsizes (LocationOnly location)     = putByte 7 >> putLocation idsizes location
-putEventModifier idsizes (ExceptionOnly exceptionOrNull caught uncaught) = do
+putEventModifier :: EventModifier -> Put
+putEventModifier (Count count)               = putByte 1 >> put count
+putEventModifier (Conditional exprId)        = putByte 2 >> put exprId
+putEventModifier (ThreadOnly threadId)       = putByte 3 >> putThreadId threadId
+putEventModifier (ClassOnly clazz)           = putByte 4 >> putReferenceTypeId clazz
+putEventModifier (ClassMatch classPattern)   = putByte 5 >> putString classPattern
+putEventModifier (ClassExclude classPattern) = putByte 6 >> putString classPattern
+putEventModifier (LocationOnly location)     = putByte 7 >> putLocation location
+putEventModifier (ExceptionOnly exceptionOrNull caught uncaught) = do
     putByte 8
-    putReferenceTypeId (referenceTypeIdSize idsizes) exceptionOrNull
+    putReferenceTypeId exceptionOrNull
     put caught
     put uncaught
-putEventModifier idsizes (FieldOnly declaring fieldId) = do
+putEventModifier (FieldOnly declaring fieldId) = do
     putByte 9
-    putReferenceTypeId (referenceTypeIdSize idsizes) declaring
-    putFieldId (fieldIdSize idsizes) fieldId
-putEventModifier idsizes (Step threadId size depth) = do
+    putReferenceTypeId declaring
+    putFieldId fieldId
+putEventModifier (Step threadId size depth) = do
     putByte 10
-    putThreadId (threadIdSize idsizes) threadId
+    putThreadId threadId
     put size
     put depth
-putEventModifier idsizes (InstanceOnly inst) = do
+putEventModifier (InstanceOnly inst) = do
     putByte 11
-    putObjectId (objectIdSize idsizes) inst
+    putObjectId inst
 
-putPacketData :: IdSizes -> PacketData -> Put
-putPacketData _ (EventSetData (EventSet sp e)) = do
+putPacketData :: PacketData -> Put
+putPacketData (EventSetData (EventSet sp e)) = do
     putSuspendPolicy sp
     mapM_ putEvent e
-putPacketData _ (ThreadIdPacketData i) =
-    put i
-putPacketData idSizes (EventRequestSetPacketData ek sp ems) = do
+putPacketData (ThreadIdPacketData i) =
+    putThreadId i
+putPacketData (EventRequestSetPacketData ek sp ems) = do
     putEventKind ek
     putSuspendPolicy sp
     put ((fromIntegral $ length ems)  :: JavaInt)
-    mapM_ (putEventModifier idSizes) ems
-putPacketData _ (EmptyPacketData) = return ()
+    mapM_ putEventModifier ems
+putPacketData (EmptyPacketData) = return ()
 
 putEvent :: Event -> Put
 putEvent (VmStartEvent ri ti) = do
     put ri
-    put ti
+    putThreadId ti
 
 parseIdSizesReply :: IdSizes -> Get PacketData
 parseIdSizesReply _ = IdSizesReply <$> (IdSizes
@@ -566,9 +581,9 @@ waitVmStartEvent h = do
             return p
     else error "No input available where expected"
 
-sendPacket :: Handle -> IdSizes -> Packet -> IO ()
-sendPacket h idsizes p = do
-    B.hPut h $ runPut $ putPacket idsizes p
+sendPacket :: Handle -> Packet -> IO ()
+sendPacket h p = do
+    B.hPut h $ runPut $ putPacket p
     hFlush h
 
 -- }}}
