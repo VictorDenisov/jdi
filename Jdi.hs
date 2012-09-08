@@ -24,7 +24,7 @@ type VirtualMachine m = StateT Configuration (ErrorT String m)
 -- Configuration description
 ---- {{{
 data Configuration = Configuration
-    { idSizesConf     :: IdSizes
+    { idSizesConf     :: Maybe IdSizes
     , packetIdCounter :: PacketId
     , vmHandle        :: Handle
     , replyParsers    :: M.Map PacketId ReplyDataParser
@@ -65,12 +65,16 @@ setVmHandle h = do
     put $ s { vmHandle = h}
 
 getIdSizes :: Monad m => VirtualMachine m IdSizes
-getIdSizes = liftM idSizesConf get
+getIdSizes = do
+    is <- idSizesConf `liftM` get
+    case is of
+        Nothing -> fail "idSizes have not been set yet"
+        Just v  -> return v
 
 setIdSizes :: Monad m => IdSizes -> VirtualMachine m ()
 setIdSizes iss = do
     s <- get
-    put $ s { idSizesConf = iss }
+    put $ s { idSizesConf = (Just iss) }
 
 -- }}}
 
@@ -98,9 +102,9 @@ askIdSizes = do
     h <- getVmHandle
     cntr <- getPacketIdCounter
     incPacketIdCounter
-    idsizes <- getIdSizes
     liftIO $ sendPacket h $ idSizesCommand cntr
-    let r = liftIO $ waitReply h idsizes $ \_ -> parseIdSizesReply idsizes
+    let emptyIdSizes = (IdSizes 0 0 0 0 0)
+    let r = liftIO $ waitReply h emptyIdSizes $ \_ -> parseIdSizesReply emptyIdSizes
     (IdSizesReply newIdSizes) <- dat `liftM` r
     setIdSizes newIdSizes
 
@@ -111,7 +115,7 @@ releaseResources = do
     liftIO $ hClose $ vmHandle s
 
 initialConfiguration :: Handle -> Configuration
-initialConfiguration h = Configuration (IdSizes 0 0 0 0 0) 0 h M.empty S.empty
+initialConfiguration h = Configuration Nothing 0 h M.empty S.empty
 
 --- Functions from official interface
 
