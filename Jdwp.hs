@@ -132,10 +132,7 @@ parseThreadId s = error $ "Currently we can not process values of this size: " +
 -- {{{
 -- PacketData components declaration.
 ---- {{{
-data PacketData = EventSet
-                    { suspendPolicy :: SuspendPolicy
-                    , events        :: [Event]
-                    }
+data PacketData = EventSetData EventSet
                 | VersionReply 
                     { description :: JavaString
                     , jdwpMajor   :: JavaInt
@@ -149,10 +146,7 @@ data PacketData = EventSet
                 | ThreadIdPacketData
                     { tId :: JavaThreadId
                     }
-                | EventRequestSetPacketData
-                    { eventKind :: EventKind
-                    , suspendPolicy :: SuspendPolicy
-                    }
+                | EventRequestSetPacketData EventKind SuspendPolicy
                 | EventRequestSetReply
                     { requestIdReply :: JavaInt
                     }
@@ -166,6 +160,11 @@ data IdSizes = IdSizes
                     , referenceTypeIdSize :: JavaInt
                     , frameIdSize         :: JavaInt
                     } deriving (Eq, Show)
+
+data EventSet = EventSet
+              { suspendPolicy :: SuspendPolicy
+              , events        :: [Event]
+              } deriving (Show, Eq)
 
 threadIdSize :: IdSizes -> JavaInt
 threadIdSize is = objectIdSize is
@@ -315,7 +314,7 @@ parseTypeTag :: Get TypeTag
 parseTypeTag = typeTagFromNumber <$> (get :: Get JavaByte)
 
 putPacketData :: PacketData -> Put
-putPacketData (EventSet sp e) = do
+putPacketData (EventSetData (EventSet sp e)) = do
     putSuspendPolicy sp
     mapM_ putEvent e
 putPacketData (ThreadIdPacketData i) =
@@ -356,7 +355,7 @@ parseEventSet idsizes = do
     sp <- parseSuspendPolicy
     eventCount <- parseInt
     eventList <- parseList eventCount (parseEvent idsizes)
-    return $ EventSet sp eventList
+    return $ EventSetData (EventSet sp eventList)
 
 parseEvent :: IdSizes -> Get Event
 parseEvent idsizes = do
