@@ -2,13 +2,20 @@ module Jdwp where
 
 import Prelude hiding (length, id)
 import Data.Word (Word8, Word16, Word32, Word64)
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Char8 as B8
+import qualified Data.ByteString.Lazy as B
+import qualified Data.ByteString.Lazy.Char8 as B8
 import qualified Data.Map as M
 import Data.Binary (Binary(..), Get, Put)
 import Data.Bits ((.&.))
 import Data.List (find)
 import Control.Applicative ((<$>), (<*>))
+import Data.Binary.Get (runGet)
+import Data.Binary.Put (runPut)
+import Control.Monad.Trans (liftIO, lift)
+import GHC.IO.Handle (Handle, hClose, hSetBinaryMode, hPutStr, hFlush, hWaitForInput)
+import Control.Monad (guard, when)
+import Control.Monad.Error (ErrorT, runErrorT)
+import Control.Monad.IO.Class (MonadIO)
 
 ------------Packet description and parsing section.
 -- {{{
@@ -398,6 +405,71 @@ resumeThreadCommand id threadId = CommandPacket 19 id 0 11 3 (ThreadIdPacketData
 
 eventSetRequest :: PacketId -> EventKind -> SuspendPolicy -> Packet
 eventSetRequest id ek sp = CommandPacket 17 id 0 15 1 $ EventRequestSetPacketData ek sp
+
+-- }}}
+------------Jdwp communication functions
+-- {{{
+
+handshake :: MonadIO m => Handle -> ErrorT String m ()
+handshake h = do
+    liftIO $ putStrLn "Connected. Initiating handshake..."
+    liftIO $ hPutStr h "JDWP-Handshake"
+    liftIO $ hFlush h
+    value <- liftIO $ B.hGet h 14
+    when (value /= (B8.pack "JDWP-Handshake")) $ fail "Handshake FAILED."
+    liftIO $ putStrLn "Handshake successful."
+
+receivePacket :: Handle -> IdSizes -> ReplyDataParser -> IO Packet
+receivePacket h idsizes f = do
+    inputAvailable <- hWaitForInput h (-1)
+    if inputAvailable
+    then do putStrLn "Receiving a packet..."
+            lengthString <- B.hGet h 4
+            let length = (fromIntegral $ runGet (parseInt) lengthString) - 4
+            reminder <- B.hGet h length
+            let p = runGet (parsePacket idsizes f) (lengthString `B.append` reminder)
+            return p
+    else error "No input available where expected"
+
+waitReply :: Handle -> IdSizes -> ReplyDataParser -> IO Packet
+waitReply h idsizes f = do
+    packet <- receivePacket h idsizes f
+    case packet of
+        CommandPacket _ _ _ _ _ _ -> error "reply expected, but command received"
+        {- Normally here some queue should be implemented, but currectly for brevity
+         - we assume that we never get event before reply.
+         -}
+        ReplyPacket _ _ _ _ _ -> return packet
+
+waitEvent :: Handle -> IdSizes -> IO Packet
+waitEvent h idsizes = do
+    packet <- receivePacket h idsizes $ \_ -> error "ReplyDataParser is invoked where only command parsing is expected"
+    case packet of
+        CommandPacket _ _ _ _ _ _ -> return packet
+        ReplyPacket _ _ _ _ _ -> error "CommandPacket is expected, but reply packet received"
+
+-- When we parse this event we don't have information about size of threadId.
+-- We use the fact that threadId is the last field in the event and we can determine its size
+-- as request_length - length_of_fields_before_threadId.
+-- for current version of JDWP length_of_fields_before_threadIs is 21.
+waitVmStartEvent :: Handle -> IO Packet
+waitVmStartEvent h = do
+    inputAvailable <- hWaitForInput h (-1)
+    if inputAvailable
+    then do putStrLn "Waiting for VmStartEvent"
+            lengthString <- B.hGet h 4
+            let length = (fromIntegral $ runGet (parseInt) lengthString) - 4
+            reminder <- B.hGet h length
+            let threadIdSize = fromIntegral $ (length + 4) - 21
+            let replyParser = \_ -> error "ReplyDataParser is not expected to be invoked."
+            let p = runGet (parsePacket (IdSizes 0 0 threadIdSize 0 0) replyParser) (lengthString `B.append` reminder)
+            return p
+    else error "No input available where expected"
+
+sendPacket :: Handle -> Packet -> IO ()
+sendPacket h p = do
+    B.hPut h $ runPut $ putPacket p
+    hFlush h
 
 -- }}}
 -- vim: foldmethod=marker foldmarker={{{,}}}
