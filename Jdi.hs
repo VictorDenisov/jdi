@@ -23,12 +23,21 @@ type VirtualMachine m = StateT Configuration (ErrorT String m)
 
 -- Configuration description
 ---- {{{
+data JdwpVersion = JdwpVersion J.JavaInt J.JavaInt deriving (Show, Eq)
+
+instance Ord JdwpVersion where
+    compare (JdwpVersion maj1 min1) (JdwpVersion maj2 min2) =
+        case min1 `compare` min2 of
+            EQ -> maj1 `compare` maj2
+            v  -> v
+
 data Configuration = Configuration
     { idSizesConf     :: Maybe J.IdSizes
     , packetIdCounter :: J.PacketId
     , vmHandle        :: Handle
     , replyParsers    :: M.Map J.PacketId J.ReplyDataParser
     , eventQueue      :: S.Seq J.EventSet
+    , jdwpVersion     :: Maybe JdwpVersion
     }
 
 yieldPacketIdCounter :: Monad m => VirtualMachine m J.PacketId
@@ -79,6 +88,17 @@ setIdSizes iss = do
     s <- get
     put $ s { idSizesConf = (Just iss) }
 
+getJdwpVersion :: Monad m => VirtualMachine m JdwpVersion
+getJdwpVersion = do
+    v <- jdwpVersion `liftM` get
+    case v of
+        Nothing -> fail "version hasn't been set yet"
+        Just v  -> return v
+
+setJdwpVersion :: Monad m => JdwpVersion -> VirtualMachine m ()
+setJdwpVersion v = do
+    s <- get
+    put $ s { jdwpVersion = (Just v) }
 -- }}}
 
 runVirtualMachine :: MonadIO m =>
@@ -99,6 +119,7 @@ preflight = do
     J.EventSetData vmStartEventSet <- J.dat `liftM` (liftIO $ J.waitVmStartEvent h)
     addToQueue vmStartEventSet
     askIdSizes
+    askJdwpVersion
 
 askIdSizes :: MonadIO m => VirtualMachine m ()
 askIdSizes = do
@@ -110,6 +131,10 @@ askIdSizes = do
     (J.IdSizesReply newIdSizes) <- J.dat `liftM` r
     setIdSizes newIdSizes
 
+askJdwpVersion :: MonadIO m => VirtualMachine m ()
+askJdwpVersion = do
+    v <- runVersionCommand
+    setJdwpVersion $ JdwpVersion (J.jdwpMajor v) (J.jdwpMinor v)
 
 releaseResources :: MonadIO m => VirtualMachine m ()
 releaseResources = do
@@ -117,7 +142,7 @@ releaseResources = do
     liftIO $ hClose $ vmHandle s
 
 initialConfiguration :: Handle -> Configuration
-initialConfiguration h = Configuration Nothing 0 h M.empty S.empty
+initialConfiguration h = Configuration Nothing 0 h M.empty S.empty Nothing
 
 --- Auxiliary functions
 runVersionCommand :: MonadIO m => VirtualMachine m J.PacketData

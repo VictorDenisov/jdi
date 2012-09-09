@@ -8,6 +8,8 @@ main = do
     runVirtualMachine "localhost" (PortNumber 2044) $ do
         vs <- runVersionCommand
         liftIO $ putStrLn $ "Processing virtual ----- machine with name: " ++ (show vs)
+        jdv <- getJdwpVersion
+        liftIO $ putStrLn $ "JdwpVersion: " ++ (show jdv)
         es <- removeEvent
         liftIO $ putStrLn $ show es
         rd <- enable createClassPrepareRequest
