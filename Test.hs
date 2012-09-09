@@ -6,8 +6,8 @@ import Control.Monad.Trans (liftIO, lift)
 
 main = do
     runVirtualMachine "localhost" (PortNumber 2044) $ do
-        nm <- name
-        liftIO $ putStrLn $ "Processing virtual ----- machine with name: " ++ nm
+        vs <- runVersionCommand
+        liftIO $ putStrLn $ "Processing virtual ----- machine with name: " ++ (show vs)
         es <- removeEvent
         liftIO $ putStrLn $ show es
         rd <- enable createClassPrepareRequest
