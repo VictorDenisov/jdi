@@ -220,6 +220,8 @@ data PacketData = EventSetData EventSet
                 | EventRequestSetReply
                     { requestIdReply :: JavaInt
                     }
+                | CapabilitiesReply Capabilities
+                | CapabilitiesNewReply Capabilities
                 | EmptyPacketData
                   deriving (Eq, Show)
 
@@ -308,6 +310,37 @@ data TypeTag = Class
 
 newtype ClassStatus = ClassStatus JavaInt
                       deriving (Eq, Show)
+
+data Capabilities = Capabilities
+    { canWatchFieldModification        :: JavaBoolean
+    , canWatchFieldAccess              :: JavaBoolean
+    , canGetBytecodes                  :: JavaBoolean
+    , canGetSynteticAttribute          :: JavaBoolean
+    , canGetOwnedMonitorInfo           :: JavaBoolean
+    , canGetCurrentContendedMonitor    :: JavaBoolean
+    , canGetMonitorInfo                :: JavaBoolean
+    , canRedefineClasses               :: JavaBoolean
+    , canAddMethod                     :: JavaBoolean
+    , canUnrestrictedlyRedefineClasses :: JavaBoolean
+    , canPopFrames                     :: JavaBoolean
+    , canUseInstanceFilters            :: JavaBoolean
+    , canGetSourceDebugExtension       :: JavaBoolean
+    , canRequestVmDeathEvent           :: JavaBoolean
+    , canSetDefaultStratum             :: JavaBoolean
+    } deriving (Show, Eq)
+
+lengthOfPacketData :: PacketData -> Word32
+lengthOfPacketData (ThreadIdPacketData _) = 8
+lengthOfPacketData (EventRequestSetPacketData _ _ modifiers) = 6 + (foldr (+) 0 (map lengthOfEventModifier modifiers))
+
+lengthOfEventModifier :: EventModifier -> Word32
+lengthOfEventModifier (Count _) = 1 + 4;
+lengthOfEventModifier (Conditional _) = 1 + 4;
+lengthOfEventModifier (ThreadOnly (JavaObjectId l v)) = 1 + l;
+lengthOfEventModifier (ClassOnly (JavaReferenceTypeId l v)) = 1 + l;
+lengthOfEventModifier (ClassMatch s) = 1 + 4 + fromIntegral (length s);
+lengthOfEventModifier (ClassExclude s) = 1 + 4 + fromIntegral (length s);
+lengthOfEventModifier _ = error "unhandled size yet"
 
 fromNumber :: [(JavaByte, a)] -> JavaByte -> a
 fromNumber list n = case find ((== n) . fst) list of
@@ -519,7 +552,17 @@ resumeThreadCommand :: PacketId -> JavaThreadId -> Packet
 resumeThreadCommand packetId threadId = CommandPacket 19 packetId 0 11 3 (ThreadIdPacketData threadId)
 
 eventSetRequest :: PacketId -> EventKind -> SuspendPolicy -> [EventModifier] -> Packet
-eventSetRequest packetId ek sp ems = CommandPacket 17 packetId 0 15 1 $ EventRequestSetPacketData ek sp ems
+eventSetRequest packetId ek sp ems = CommandPacket
+                                        (11 + (lengthOfPacketData packetData))
+                                        packetId 0 15 1 packetData
+    where packetData = EventRequestSetPacketData ek sp ems
+
+
+capabilitiesCommand :: PacketId -> Packet
+capabilitiesCommand packetId = CommandPacket 11 packetId 0 1 12 EmptyPacketData
+
+capabilitiesNewCommand :: PacketId -> Packet
+capabilitiesNewCommand packetId = CommandPacket 11 packetId 0 1 17 EmptyPacketData
 
 -- }}}
 ------------Jdwp communication functions

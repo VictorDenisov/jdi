@@ -23,14 +23,6 @@ type VirtualMachine m = StateT Configuration (ErrorT String m)
 
 -- Configuration description
 ---- {{{
-data JdwpVersion = JdwpVersion J.JavaInt J.JavaInt deriving (Show, Eq)
-
-instance Ord JdwpVersion where
-    compare (JdwpVersion maj1 min1) (JdwpVersion maj2 min2) =
-        case min1 `compare` min2 of
-            EQ -> maj1 `compare` maj2
-            v  -> v
-
 data Configuration = Configuration
     { idSizesConf     :: Maybe J.IdSizes
     , packetIdCounter :: J.PacketId
@@ -38,7 +30,16 @@ data Configuration = Configuration
     , replyParsers    :: M.Map J.PacketId J.ReplyDataParser
     , eventQueue      :: S.Seq J.EventSet
     , jdwpVersion     :: Maybe JdwpVersion
+    , capabilities    :: Maybe J.Capabilities
     }
+
+data JdwpVersion = JdwpVersion J.JavaInt J.JavaInt deriving (Show, Eq)
+
+instance Ord JdwpVersion where
+    compare (JdwpVersion maj1 min1) (JdwpVersion maj2 min2) =
+        case min1 `compare` min2 of
+            EQ -> maj1 `compare` maj2
+            v  -> v
 
 yieldPacketIdCounter :: Monad m => VirtualMachine m J.PacketId
 yieldPacketIdCounter = incPacketIdCounter >> getPacketIdCounter
@@ -99,6 +100,18 @@ setJdwpVersion :: Monad m => JdwpVersion -> VirtualMachine m ()
 setJdwpVersion v = do
     s <- get
     put $ s { jdwpVersion = (Just v) }
+
+getCapabilities :: Monad m => VirtualMachine m J.Capabilities
+getCapabilities = do
+    c <- capabilities `liftM` get
+    case c of
+        Nothing -> fail "capabilities are not set"
+        Just v  -> return v
+
+setCapabilities :: Monad m => J.Capabilities -> VirtualMachine m ()
+setCapabilities c = do
+    s <- get
+    put $ s { capabilities = (Just c) }
 -- }}}
 
 runVirtualMachine :: MonadIO m =>
@@ -136,13 +149,23 @@ askJdwpVersion = do
     v <- runVersionCommand
     setJdwpVersion $ JdwpVersion (J.jdwpMajor v) (J.jdwpMinor v)
 
+askCapabilities :: MonadIO m => VirtualMachine m ()
+askCapabilities = do
+    h <- getVmHandle
+    cntr <- yieldPacketIdCounter
+    idsizes <- getIdSizes
+    jdwpVersion <- getJdwpVersion
+    if jdwpVersion >= (JdwpVersion 1 4)
+    then liftIO $ J.sendPacket h $ J.capabilitiesNewCommand cntr
+    else liftIO $ J.sendPacket h $ J.capabilitiesCommand cntr
+
 releaseResources :: MonadIO m => VirtualMachine m ()
 releaseResources = do
     s <- get
     liftIO $ hClose $ vmHandle s
 
 initialConfiguration :: Handle -> Configuration
-initialConfiguration h = Configuration Nothing 0 h M.empty S.empty Nothing
+initialConfiguration h = Configuration Nothing 0 h M.empty S.empty Nothing Nothing
 
 --- Auxiliary functions
 runVersionCommand :: MonadIO m => VirtualMachine m J.PacketData
