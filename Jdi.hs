@@ -227,4 +227,50 @@ enable (ClassPrepareRequest (EventRequest suspendPolicy)) = do
 createClassPrepareRequest :: EventRequest
 createClassPrepareRequest = ClassPrepareRequest $ EventRequest J.SuspendAll
 
+canAddMethod :: MonadIO m => VirtualMachine m Bool
+canAddMethod = J.canAddMethod `liftM` getCapabilities
+
+canBeModified :: MonadIO m => VirtualMachine m Bool
+canBeModified = undefined -- I'm not sure what should be here right now.
+                          -- Different JDI implementations put just constant
+                          -- values true or false. TODO
+
+canGetBytecodes :: MonadIO m => VirtualMachine m Bool
+canGetBytecodes = J.canGetBytecodes `liftM` getCapabilities
+
+canGetCurrentContendedMonitor :: MonadIO m => VirtualMachine m Bool
+canGetCurrentContendedMonitor = J.canGetCurrentContendedMonitor `liftM` getCapabilities
+
+canGetMonitorInfo :: MonadIO m => VirtualMachine m Bool
+canGetMonitorInfo = J.canGetMonitorInfo `liftM` getCapabilities
+
+canGetOwnedMonitorInfo :: MonadIO m => VirtualMachine m Bool
+canGetOwnedMonitorInfo = J.canGetOwnedMonitorInfo `liftM` getCapabilities
+
+canGetSourceDebugExtension :: MonadIO m => VirtualMachine m Bool
+canGetSourceDebugExtension = J.canGetSourceDebugExtension `liftM` getCapabilities
+
+canGetSynteticAttribute :: MonadIO m => VirtualMachine m Bool
+canGetSynteticAttribute = J.canGetSynteticAttribute `liftM` getCapabilities
+
+canPopFrames :: MonadIO m => VirtualMachine m Bool
+canPopFrames = J.canPopFrames `liftM` getCapabilities
+
+canRedefineClasses :: MonadIO m => VirtualMachine m Bool
+canRedefineClasses = J.canRedefineClasses `liftM` getCapabilities
+
+canRequestVmDeathEvent :: MonadIO m => VirtualMachine m Bool
+canRequestVmDeathEvent = J.canRequestVmDeathEvent `liftM` getCapabilities
+
+canUnrestrictedlyRedefineClasses :: MonadIO m => VirtualMachine m Bool
+canUnrestrictedlyRedefineClasses = J.canUnrestrictedlyRedefineClasses `liftM` getCapabilities
+
+canUseInstanceFilters :: MonadIO m => VirtualMachine m Bool
+canUseInstanceFilters = J.canUseInstanceFilters `liftM` getCapabilities
+
+canWatchFieldAccess :: MonadIO m => VirtualMachine m Bool
+canWatchFieldAccess = J.canWatchFieldAccess `liftM` getCapabilities
+
+canWatchFieldModification :: MonadIO m => VirtualMachine m Bool
+canWatchFieldModification = J.canWatchFieldModification `liftM` getCapabilities
 -- vim: foldmethod=marker foldmarker={{{,}}}
