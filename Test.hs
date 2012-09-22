@@ -3,6 +3,7 @@ import Jdi
 import Network.Socket.Internal (PortNumber(..))
 import Network
 import Control.Monad.Trans (liftIO, lift)
+import Data.List
 
 main = do
     runVirtualMachine "localhost" (PortNumber 2044) $ do
@@ -20,3 +21,5 @@ main = do
         resume
         es <- removeEvent
         liftIO $ putStrLn $ show es
+        classes <- allClasses
+        liftIO $ putStrLn $ intercalate "\n" (map show classes)

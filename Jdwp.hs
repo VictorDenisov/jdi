@@ -282,6 +282,9 @@ data TypeTag = Class
 newtype ClassStatus = ClassStatus JavaInt
                       deriving (Eq, Show)
 
+data ReferenceType = ReferenceType TypeTag JavaReferenceTypeId JavaString ClassStatus
+                     deriving (Eq, Show)
+
 data Capabilities = Capabilities
     { canWatchFieldModification        :: JavaBoolean
     , canWatchFieldAccess              :: JavaBoolean
@@ -443,6 +446,19 @@ parseEvent idsizes = do
         VmDeath -> VmDeathEvent <$> parseInt
         _       -> return NoEvent
 
+parseReferenceType :: IdSizes -> Get ReferenceType
+parseReferenceType idsizes = ReferenceType
+                                <$> parseTypeTag
+                                <*> (parseReferenceTypeId $ referenceTypeIdSize idsizes)
+                                <*> parseString
+                                <*> parseClassStatus
+
+parseAllClassesReply :: IdSizes -> Get [ReferenceType]
+parseAllClassesReply idsizes = do
+    classCount <- parseInt
+    classes <- mapM (\_ -> parseReferenceType idsizes) [1..classCount]
+    return classes
+
 putEventRequest :: EventKind -> SuspendPolicy -> [EventModifier] -> Put
 putEventRequest ek sp ems = do
     putEventKind ek
@@ -482,6 +498,9 @@ capabilitiesCommand packetId = CommandPacket 11 packetId 0 1 12 B.empty
 
 capabilitiesNewCommand :: PacketId -> Packet
 capabilitiesNewCommand packetId = CommandPacket 11 packetId 0 1 17 B.empty
+
+allClassesCommand :: PacketId -> Packet
+allClassesCommand packetId = CommandPacket 11 packetId 0 1 3 B.empty
 
 -- }}}
 ------------Jdwp communication functions

@@ -273,4 +273,15 @@ canWatchFieldAccess = J.canWatchFieldAccess `liftM` getCapabilities
 canWatchFieldModification :: MonadIO m => VirtualMachine m Bool
 canWatchFieldModification = J.canWatchFieldModification `liftM` getCapabilities
 
+type ReferenceType = J.ReferenceType
+
+allClasses :: MonadIO m => VirtualMachine m [ReferenceType]
+allClasses = do
+    h <- getVmHandle
+    idsizes <- getIdSizes
+    cntr <- yieldPacketIdCounter
+    liftIO $ J.sendPacket h $ J.allClassesCommand cntr
+    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    let classes = runGet (J.parseAllClassesReply idsizes) (J.toLazy r)
+    return classes
 -- vim: foldmethod=marker foldmarker={{{,}}}
