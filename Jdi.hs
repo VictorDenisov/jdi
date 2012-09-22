@@ -297,4 +297,21 @@ allThreads = do
     let threads = runGet (J.parseAllThreadsReply idsizes) (J.toLazy r)
     return threads
 
+classesByName :: MonadIO m => String -> VirtualMachine m [ReferenceType]
+classesByName name = do
+    let jniName = "L" ++ (map replaceDot name) ++ ";"
+    h <- getVmHandle
+    idsizes <- getIdSizes
+    cntr <- yieldPacketIdCounter
+    liftIO $ J.sendPacket h $ J.classesBySignatureCommand cntr jniName
+    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    let classes = runGet (J.parseClassesBySignatureReply idsizes) (J.toLazy r)
+    return $ map (setSignature jniName) classes
+    
+    where
+        replaceDot '.' = '/'
+        replaceDot x = x
+        setSignature newSig (J.ReferenceType tt ri sig cs) =
+            J.ReferenceType tt ri newSig cs
+
 -- vim: foldmethod=marker foldmarker={{{,}}}

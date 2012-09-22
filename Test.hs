@@ -25,3 +25,5 @@ main = do
         liftIO $ putStrLn $ intercalate "\n" (map show classes)
         threads <- allThreads
         liftIO $ putStrLn $ intercalate "\n" (map show threads)
+        filteredClasses <- classesByName "java.io.BufferedReader"
+        liftIO $ putStrLn $ intercalate "\n" (map show filteredClasses)

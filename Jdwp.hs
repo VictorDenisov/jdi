@@ -306,6 +306,9 @@ data Capabilities = Capabilities
     , canSetDefaultStratum             :: JavaBoolean
     } deriving (Show, Eq)
 
+lengthOfJavaString :: JavaString -> Word32
+lengthOfJavaString s = 4 + (fromIntegral $ length s)
+
 lengthOfEventModifier :: EventModifier -> Word32
 lengthOfEventModifier (Count _) = 1 + 4;
 lengthOfEventModifier (Conditional _) = 1 + 4;
@@ -450,16 +453,32 @@ parseEvent idsizes = do
         _       -> return NoEvent
 
 parseReferenceType :: IdSizes -> Get ReferenceType
-parseReferenceType idsizes = ReferenceType
-                                <$> parseTypeTag
-                                <*> (parseReferenceTypeId $ referenceTypeIdSize idsizes)
-                                <*> parseString
-                                <*> parseClassStatus
+parseReferenceType idsizes =
+    ReferenceType
+        <$> parseTypeTag
+        <*> (parseReferenceTypeId $ referenceTypeIdSize idsizes)
+        <*> parseString
+        <*> parseClassStatus
+
+parseReferenceTypeNoSignature :: IdSizes -> Get ReferenceType
+parseReferenceTypeNoSignature idsizes =
+    ReferenceType
+        <$> parseTypeTag
+        <*> (parseReferenceTypeId $ referenceTypeIdSize idsizes)
+        <*> (return "")
+        <*> parseClassStatus
+
 
 parseAllClassesReply :: IdSizes -> Get [ReferenceType]
 parseAllClassesReply idsizes = do
     classCount <- parseInt
     classes <- mapM (\_ -> parseReferenceType idsizes) [1..classCount]
+    return classes
+
+parseClassesBySignatureReply :: IdSizes -> Get [ReferenceType]
+parseClassesBySignatureReply idsizes = do
+    classCount <- parseInt
+    classes <- mapM (\_ -> parseReferenceTypeNoSignature idsizes) [1..classCount]
     return classes
 
 parseThreadReference :: IdSizes -> Get ThreadReference
@@ -501,7 +520,11 @@ resumeThreadCommand packetId threadId = CommandPacket 19 packetId 0 11 3 (toStri
 eventSetRequest :: PacketId -> EventKind -> SuspendPolicy -> [EventModifier] -> Packet
 eventSetRequest packetId ek sp ems = CommandPacket
                                         (11 + (6 + lengthOfEventModifiers))
-                                        packetId 0 15 1 (toStrict $ runPut $ putEventRequest ek sp ems)
+                                        packetId
+                                        0
+                                        15
+                                        1
+                                        (toStrict $ runPut $ putEventRequest ek sp ems)
                             where lengthOfEventModifiers = (foldr (+) 0 (map lengthOfEventModifier ems))
 
 
@@ -516,6 +539,16 @@ allClassesCommand packetId = CommandPacket 11 packetId 0 1 3 B.empty
 
 allThreadsCommand :: PacketId -> Packet
 allThreadsCommand packetId = CommandPacket 11 packetId 0 1 4 B.empty
+
+classesBySignatureCommand :: PacketId -> JavaString -> Packet
+classesBySignatureCommand packetId jniName =
+    CommandPacket
+        (11 + lengthOfJavaString jniName)
+        packetId
+        0
+        1
+        2
+        (toStrict $ runPut $ putString jniName)
 
 -- }}}
 ------------Jdwp communication functions
