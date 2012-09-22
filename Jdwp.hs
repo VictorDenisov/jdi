@@ -550,6 +550,10 @@ classesBySignatureCommand packetId jniName =
         2
         (toStrict $ runPut $ putString jniName)
 
+exitCommand :: PacketId -> JavaInt -> Packet
+exitCommand packetId exitCode =
+    CommandPacket (11 + 4) packetId 0 1 10 (toStrict $ runPut $ put exitCode)
+
 -- }}}
 ------------Jdwp communication functions
 -- {{{

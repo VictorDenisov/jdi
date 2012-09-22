@@ -314,4 +314,12 @@ classesByName name = do
         setSignature newSig (J.ReferenceType tt ri sig cs) =
             J.ReferenceType tt ri newSig cs
 
+exit :: MonadIO m => Int -> VirtualMachine m ()
+exit exitCode = do
+    h <- getVmHandle
+    cntr <- yieldPacketIdCounter
+    liftIO $ J.sendPacket h $ J.exitCommand cntr (fromIntegral exitCode)
+    liftIO $ J.waitReply h
+    return ()
+
 -- vim: foldmethod=marker foldmarker={{{,}}}
