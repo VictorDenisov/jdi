@@ -27,7 +27,6 @@ data Configuration = Configuration
     { idSizesConf     :: Maybe J.IdSizes
     , packetIdCounter :: J.PacketId
     , vmHandle        :: Handle
-    , replyParsers    :: M.Map J.PacketId J.ReplyDataParser
     , eventQueue      :: S.Seq J.EventSet
     , jdwpVersion     :: Maybe JdwpVersion
     , capabilities    :: Maybe J.Capabilities
@@ -129,20 +128,21 @@ runVirtualMachine host port vm = do
 preflight :: MonadIO m => VirtualMachine m ()
 preflight = do
     h <- getVmHandle
-    J.EventSetData vmStartEventSet <- J.dat `liftM` (liftIO $ J.waitVmStartEvent h)
-    addToQueue vmStartEventSet
+    firstPacketData <- J.dat `liftM` (liftIO $ J.waitEvent h)
     askIdSizes
+    idsizes <- getIdSizes
+    let vmStartEventSet = runGet (J.parseEventSet idsizes) (J.toLazy firstPacketData)
+    addToQueue vmStartEventSet
     askJdwpVersion
 
 askIdSizes :: MonadIO m => VirtualMachine m ()
 askIdSizes = do
     h <- getVmHandle
+    liftIO $ putStrLn $ show h
     cntr <- yieldPacketIdCounter
     liftIO $ J.sendPacket h $ J.idSizesCommand cntr
-    let emptyIdSizes = (J.IdSizes 0 0 0 0 0)
-    let r = liftIO $ J.waitReply h emptyIdSizes $ \_ -> J.parseIdSizesReply emptyIdSizes
-    (J.IdSizesReply newIdSizes) <- J.dat `liftM` r
-    setIdSizes newIdSizes
+    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    setIdSizes $ runGet J.parseIdSizes (J.toLazy r)
 
 askJdwpVersion :: MonadIO m => VirtualMachine m ()
 askJdwpVersion = do
@@ -165,17 +165,16 @@ releaseResources = do
     liftIO $ hClose $ vmHandle s
 
 initialConfiguration :: Handle -> Configuration
-initialConfiguration h = Configuration Nothing 0 h M.empty S.empty Nothing Nothing
+initialConfiguration h = Configuration Nothing 0 h S.empty Nothing Nothing
 
 --- Auxiliary functions
-runVersionCommand :: MonadIO m => VirtualMachine m J.PacketData
+runVersionCommand :: MonadIO m => VirtualMachine m J.Version
 runVersionCommand = do
     h <- getVmHandle
     cntr <- yieldPacketIdCounter
-    idsizes <- getIdSizes
     liftIO $ J.sendPacket h $ J.versionCommand cntr
-    p <- liftIO $ J.waitReply h idsizes $ \_ -> J.parseVersionReply idsizes
-    return $ J.dat p
+    p <- liftIO $ J.waitReply h
+    return $ runGet J.parseVersion (J.toLazy $ J.dat p)
     
 
 --- Functions from official interface
@@ -196,8 +195,8 @@ removeEvent = do
     qe <- queueEmpty
     if qe
     then do
-        J.EventSetData e <- J.dat `liftM` (liftIO $ J.waitEvent h idsizes)
-        return e
+        eventSetData <- J.dat `liftM` (liftIO $ J.waitEvent h)
+        return $ runGet (J.parseEventSet idsizes) (J.toLazy eventSetData)
     else takeFromQueue
 
 resume :: MonadIO m => VirtualMachine m ()
@@ -206,7 +205,7 @@ resume = do
     cntr <- yieldPacketIdCounter
     idsizes <- getIdSizes
     liftIO $ J.sendPacket h $ J.resumeVmCommand cntr
-    r <- liftIO $ J.waitReply h idsizes $ \_ -> J.parseEmptyData idsizes
+    r <- liftIO $ J.waitReply h
     return ()
 
 data EventRequest = ClassPrepareRequest EventRequest
@@ -220,8 +219,8 @@ enable (ClassPrepareRequest (EventRequest suspendPolicy)) = do
     idsizes <- getIdSizes
     cntr <- yieldPacketIdCounter
     liftIO $ J.sendPacket h $ J.eventSetRequest cntr J.ClassPrepare suspendPolicy []
-    let r = liftIO $ J.waitReply h idsizes $ \_ -> J.parseEventSetRequestReply idsizes
-    (J.EventRequestSetReply requestId) <- J.dat `liftM` r
+    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    let requestId = runGet J.parseInt (J.toLazy r)
     return $ RequestDescriptor J.ClassPrepare requestId
 
 createClassPrepareRequest :: EventRequest
@@ -273,4 +272,5 @@ canWatchFieldAccess = J.canWatchFieldAccess `liftM` getCapabilities
 
 canWatchFieldModification :: MonadIO m => VirtualMachine m Bool
 canWatchFieldModification = J.canWatchFieldModification `liftM` getCapabilities
+
 -- vim: foldmethod=marker foldmarker={{{,}}}

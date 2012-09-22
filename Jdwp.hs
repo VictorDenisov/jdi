@@ -1,14 +1,16 @@
 module Jdwp where
 
 import Data.Word (Word8, Word16, Word32, Word64)
-import qualified Data.ByteString.Lazy as B
-import qualified Data.ByteString.Lazy.Char8 as B8
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as B8
+import qualified Data.ByteString.Lazy as LB
+import qualified Data.ByteString.Lazy.Char8 as LB8
 import qualified Data.Map as M
 import Data.Binary (Binary(..), Get, Put)
 import Data.Bits ((.&.))
 import Data.List (find)
 import Control.Applicative ((<$>), (<*>))
-import Data.Binary.Get (runGet)
+import Data.Binary.Get (runGet, getByteString)
 import Data.Binary.Put (runPut)
 import Control.Monad.Trans (liftIO, lift)
 import GHC.IO.Handle (Handle, hClose, hSetBinaryMode, hPutStr, hFlush, hWaitForInput)
@@ -27,20 +29,20 @@ data Packet = CommandPacket { packetLen  :: Word32
                             , flags      :: Word8
                             , commandSet :: CommandSet
                             , command    :: Command
-                            , dat        :: PacketData
+                            , dat        :: B.ByteString
                             }
             | ReplyPacket   { packetLen  :: Word32
                             , packetId   :: PacketId
                             , flags      :: Word8
                             , errorCode  :: Word16
-                            , dat        :: PacketData
+                            , dat        :: B.ByteString
                             }
               deriving Show
 
-type ReplyDataParser = PacketId -> Get PacketData
+packetHeaderSize = 11
 
-parsePacket :: IdSizes -> ReplyDataParser -> Get Packet
-parsePacket idsizes replyDataParser = do
+parsePacket :: Get Packet
+parsePacket = do
     l <- get
     i <- get
     f <- get
@@ -48,21 +50,12 @@ parsePacket idsizes replyDataParser = do
     then do
         cs <- get
         c  <- get
-        d  <- (commandParser $ dataParsers (cs, c)) idsizes
+        d  <- getByteString (fromIntegral l - packetHeaderSize)
         return (CommandPacket l i f cs c d)
     else do
         e <- get
-        d <- case e of
-            0 -> replyDataParser i
-            _ -> parseEmptyData idsizes
+        d <- getByteString (fromIntegral l - packetHeaderSize)
         return (ReplyPacket l i f e d)
-
-parseList :: Word32 -> Get a -> Get [a]
-parseList 0 p = return []
-parseList l p = do
-    x <- p
-    xs <- parseList (l - 1) p
-    return (x:xs)
 
 putPacket :: Packet -> Put
 putPacket (CommandPacket l i f cs c d) = do
@@ -71,14 +64,12 @@ putPacket (CommandPacket l i f cs c d) = do
     put f
     put cs
     put c
-    putPacketData d
 
 putPacket (ReplyPacket l i f e d) = do
     put l
     put i
     put f
     put e
-    putPacketData d
 -- }}}
 ---------------General types section
 -- {{{
@@ -89,9 +80,9 @@ type JavaString          = String
 type JavaBoolean         = Bool
 type JavaThreadId        = JavaObjectId
 type JavaClassId         = JavaReferenceTypeId
-data JavaFieldId      = JavaFieldId JavaInt Word64 deriving (Show, Eq)
-data JavaMethodId     = JavaMethodId JavaInt Word64 deriving (Show, Eq)
-data JavaObjectId     = JavaObjectId JavaInt Word64 deriving (Show, Eq)
+data JavaFieldId         = JavaFieldId JavaInt Word64 deriving (Show, Eq)
+data JavaMethodId        = JavaMethodId JavaInt Word64 deriving (Show, Eq)
+data JavaObjectId        = JavaObjectId JavaInt Word64 deriving (Show, Eq)
 data JavaReferenceTypeId = JavaReferenceTypeId JavaInt Word64 deriving (Show, Eq) -- size value
 data JavaFrameId         = JavaFrameId JavaInt Word64 deriving (Show, Eq)
 
@@ -119,9 +110,8 @@ parseLong = get
 
 parseString :: Get JavaString
 parseString = do
-    len <- (get :: Get Word32)
-    list <- parseList len (get :: Get Word8)
-    return $ B8.unpack $ B.pack list
+    len <- fromIntegral <$> (get :: Get Word32)
+    B8.unpack <$> getByteString len
 
 putString :: JavaString -> Put
 putString s = do
@@ -197,33 +187,14 @@ putClassId = putReferenceTypeId
 
 parseClassId :: JavaInt -> Get JavaClassId
 parseClassId = parseReferenceTypeId
--- }}}
--------PacketData parsing section---------------------
--- {{{
--- PacketData components declaration.
----- {{{
-data PacketData = EventSetData EventSet
-                | VersionReply 
+
+data Version = Version
                     { description :: JavaString
                     , jdwpMajor   :: JavaInt
                     , jdwpMinor   :: JavaInt
                     , vmVersion   :: JavaString
                     , vmName      :: JavaString
-                    }
-                | IdSizesReply
-                    { idSizes :: IdSizes
-                    }
-                | ThreadIdPacketData
-                    { tId :: JavaThreadId
-                    }
-                | EventRequestSetPacketData EventKind SuspendPolicy [EventModifier]
-                | EventRequestSetReply
-                    { requestIdReply :: JavaInt
-                    }
-                | CapabilitiesReply Capabilities
-                | CapabilitiesNewReply Capabilities
-                | EmptyPacketData
-                  deriving (Eq, Show)
+                    } deriving (Eq, Show)
 
 data IdSizes = IdSizes
                     { fieldIdSize         :: JavaInt
@@ -233,13 +204,13 @@ data IdSizes = IdSizes
                     , frameIdSize         :: JavaInt
                     } deriving (Eq, Show)
 
+threadIdSize :: IdSizes -> JavaInt
+threadIdSize is = objectIdSize is
+
 data EventSet = EventSet
               { suspendPolicy :: SuspendPolicy
               , events        :: [Event]
               } deriving (Show, Eq)
-
-threadIdSize :: IdSizes -> JavaInt
-threadIdSize is = objectIdSize is
 
 data Event = VmStartEvent
                 { requestId :: JavaInt
@@ -329,10 +300,6 @@ data Capabilities = Capabilities
     , canSetDefaultStratum             :: JavaBoolean
     } deriving (Show, Eq)
 
-lengthOfPacketData :: PacketData -> Word32
-lengthOfPacketData (ThreadIdPacketData _) = 8
-lengthOfPacketData (EventRequestSetPacketData _ _ modifiers) = 6 + (foldr (+) 0 (map lengthOfEventModifier modifiers))
-
 lengthOfEventModifier :: EventModifier -> Word32
 lengthOfEventModifier (Count _) = 1 + 4;
 lengthOfEventModifier (Conditional _) = 1 + 4;
@@ -352,66 +319,45 @@ toNumber list e = case find ((== e) . snd) list of
                             Just (n, _) -> n
                             Nothing     -> error $ "list doesn't have value " ++ (show e)
 
-eventKindNumberList :: [(JavaByte, EventKind)]
-eventKindNumberList = [ (  1, SingleStep)
-                      , (  2, Breakpoint)
-                      , (  3, FramePop)
-                      , (  4, Exception)
-                      , (  5, UserDefined)
-                      , (  6, ThreadStart)
-                      , (  7, ThreadEnd)
-                      , (  8, ClassPrepare)
-                      , (  9, ClassUnload)
-                      , ( 10, ClassLoad)
-                      , ( 20, FieldAccess)
-                      , ( 21, FieldModification)
-                      , ( 30, ExceptionCatch)
-                      , ( 40, MethodEntry)
-                      , ( 41, MethodExit)
-                      , ( 90, VmInit)
-                      , ( 99, VmDeath)
-                      , (100, VmDisconnected)
-                      ]
+eventKindNumbers :: [(JavaByte, EventKind)]
+eventKindNumbers = [ (  1, SingleStep)
+                   , (  2, Breakpoint)
+                   , (  3, FramePop)
+                   , (  4, Exception)
+                   , (  5, UserDefined)
+                   , (  6, ThreadStart)
+                   , (  7, ThreadEnd)
+                   , (  8, ClassPrepare)
+                   , (  9, ClassUnload)
+                   , ( 10, ClassLoad)
+                   , ( 20, FieldAccess)
+                   , ( 21, FieldModification)
+                   , ( 30, ExceptionCatch)
+                   , ( 40, MethodEntry)
+                   , ( 41, MethodExit)
+                   , ( 90, VmInit)
+                   , ( 99, VmDeath)
+                   , (100, VmDisconnected)
+                   ]
 
-eventKindFromNumber :: JavaByte -> EventKind
-eventKindFromNumber = fromNumber eventKindNumberList
+suspendPolicyNumbers :: [(JavaByte, SuspendPolicy)]
+suspendPolicyNumbers = [ (0, SuspenNone)
+                       , (1, SuspendEventThread)
+                       , (2, SuspendAll)
+                       ]
 
-numberFromEventKind :: EventKind -> JavaByte
-numberFromEventKind = toNumber eventKindNumberList
+typeTagNumbers :: [(JavaByte, TypeTag)]
+typeTagNumbers = [ (1, Class)
+                 , (2, Interface)
+                 , (3, Array)
+                 ]
 
-suspendPolicyNumberList :: [(JavaByte, SuspendPolicy)]
-suspendPolicyNumberList = [ (0, SuspenNone)
-                          , (1, SuspendEventThread)
-                          , (2, SuspendAll)
-                          ]
-
-suspendPolicyFromNumber :: JavaByte -> SuspendPolicy
-suspendPolicyFromNumber = fromNumber suspendPolicyNumberList
-
-numberFromSuspendPolicy :: SuspendPolicy -> JavaByte
-numberFromSuspendPolicy = toNumber suspendPolicyNumberList
-
-typeTagNumberList :: [(JavaByte, TypeTag)]
-typeTagNumberList = [ (1, Class)
-                    , (2, Interface)
-                    , (3, Array)
-                    ]
-
-typeTagFromNumber :: JavaByte -> TypeTag
-typeTagFromNumber = fromNumber typeTagNumberList
-
-numberFromTypeTag :: TypeTag -> JavaByte
-numberFromTypeTag = toNumber typeTagNumberList
-
--- }}}
--- Parsing and putting functions
----- {{{
 --- SuspendPolicy
 putSuspendPolicy :: SuspendPolicy -> Put
-putSuspendPolicy s = put $ numberFromSuspendPolicy s
+putSuspendPolicy s = put $ (toNumber suspendPolicyNumbers) s
 
 parseSuspendPolicy :: Get SuspendPolicy
-parseSuspendPolicy = suspendPolicyFromNumber <$> (get :: Get JavaByte)
+parseSuspendPolicy = (fromNumber suspendPolicyNumbers) <$> (get :: Get JavaByte)
 
 --- ClassStatus
 putClassStatus :: ClassStatus -> Put
@@ -422,17 +368,17 @@ parseClassStatus = ClassStatus <$> get
 
 --- EventKind
 putEventKind :: EventKind -> Put
-putEventKind e = put $ numberFromEventKind e
+putEventKind e = put $ (toNumber eventKindNumbers) e
 
 parseEventKind :: Get EventKind
-parseEventKind = eventKindFromNumber <$> (get :: Get JavaByte)
+parseEventKind = (fromNumber eventKindNumbers) <$> (get :: Get JavaByte)
 
 --- TypeTag
 putTypeTag :: TypeTag -> Put
-putTypeTag t = put $ numberFromTypeTag t
+putTypeTag t = put $ (toNumber typeTagNumbers) t
 
 parseTypeTag :: Get TypeTag
-parseTypeTag = typeTagFromNumber <$> (get :: Get JavaByte)
+parseTypeTag = (fromNumber typeTagNumbers) <$> (get :: Get JavaByte)
 
 --- EventModifier
 putEventModifier :: EventModifier -> Put
@@ -461,50 +407,26 @@ putEventModifier (InstanceOnly inst) = do
     putByte 11
     putObjectId inst
 
-putPacketData :: PacketData -> Put
-putPacketData (EventSetData (EventSet sp e)) = do
-    putSuspendPolicy sp
-    mapM_ putEvent e
-putPacketData (ThreadIdPacketData i) =
-    putThreadId i
-putPacketData (EventRequestSetPacketData ek sp ems) = do
-    putEventKind ek
-    putSuspendPolicy sp
-    put ((fromIntegral $ length ems)  :: JavaInt)
-    mapM_ putEventModifier ems
-putPacketData (EmptyPacketData) = return ()
+parseIdSizes :: Get IdSizes
+parseIdSizes = IdSizes <$> parseInt
+                       <*> parseInt
+                       <*> parseInt
+                       <*> parseInt
+                       <*> parseInt
 
-putEvent :: Event -> Put
-putEvent (VmStartEvent ri ti) = do
-    put ri
-    putThreadId ti
+parseVersion :: Get Version
+parseVersion = Version <$> parseString
+                       <*> parseInt
+                       <*> parseInt
+                       <*> parseString
+                       <*> parseString
 
-parseIdSizesReply :: IdSizes -> Get PacketData
-parseIdSizesReply _ = IdSizesReply <$> (IdSizes
-                        <$> parseInt
-                        <*> parseInt
-                        <*> parseInt
-                        <*> parseInt
-                        <*> parseInt)
-
-parseVersionReply :: IdSizes -> Get PacketData
-parseVersionReply _ = VersionReply
-                        <$> parseString
-                        <*> parseInt
-                        <*> parseInt
-                        <*> parseString
-                        <*> parseString
-
-parseEventSetRequestReply :: IdSizes -> Get PacketData
-parseEventSetRequestReply _ = EventRequestSetReply
-                        <$> parseInt
-
-parseEventSet :: IdSizes -> Get PacketData
+parseEventSet :: IdSizes -> Get EventSet
 parseEventSet idsizes = do
     sp <- parseSuspendPolicy
     eventCount <- parseInt
-    eventList <- parseList eventCount (parseEvent idsizes)
-    return $ EventSetData (EventSet sp eventList)
+    eventList <- mapM (\_ -> parseEvent idsizes) [1..eventCount]
+    return $ EventSet sp eventList
 
 parseEvent :: IdSizes -> Get Event
 parseEvent idsizes = do
@@ -521,48 +443,45 @@ parseEvent idsizes = do
         VmDeath -> VmDeathEvent <$> parseInt
         _       -> return NoEvent
 
-parseEmptyData :: IdSizes -> Get PacketData
-parseEmptyData _ = return EmptyPacketData
--- }}}
-data DataParser = DataParser
-                { commandParser :: IdSizes -> Get PacketData
-                , replyParser   :: IdSizes -> Get PacketData
-                }
+putEventRequest :: EventKind -> SuspendPolicy -> [EventModifier] -> Put
+putEventRequest ek sp ems = do
+    putEventKind ek
+    putSuspendPolicy sp
+    put ((fromIntegral $ length ems)  :: JavaInt)
+    mapM_ putEventModifier ems
 
-dataParsers :: (CommandSet, Command) -> DataParser
-dataParsers ( 1,   1) = DataParser parseEmptyData parseVersionReply
-dataParsers ( 1,   7) = DataParser parseEmptyData parseIdSizesReply
-dataParsers (15,   1) = DataParser parseEmptyData parseEventSetRequestReply
-dataParsers (64, 100) = DataParser parseEventSet  parseEmptyData
-dataParsers _ = undefined
+toStrict :: LB.ByteString -> B.ByteString
+toStrict = B.concat . LB.toChunks
 
+toLazy :: B.ByteString -> LB.ByteString
+toLazy v = LB.fromChunks [v]
 -- }}}
 ------------Command Constructors Section
 -- {{{
 versionCommand :: PacketId -> Packet
-versionCommand packetId = CommandPacket 11 packetId 0 1 1 EmptyPacketData
+versionCommand packetId = CommandPacket 11 packetId 0 1 1 B.empty
 
 idSizesCommand :: PacketId -> Packet
-idSizesCommand packetId = CommandPacket 11 packetId 0 1 7 EmptyPacketData
+idSizesCommand packetId = CommandPacket 11 packetId 0 1 7 B.empty
 
 resumeVmCommand :: PacketId -> Packet
-resumeVmCommand packetId = CommandPacket 11 packetId 0 1 9 EmptyPacketData
+resumeVmCommand packetId = CommandPacket 11 packetId 0 1 9 B.empty
 
 resumeThreadCommand :: PacketId -> JavaThreadId -> Packet
-resumeThreadCommand packetId threadId = CommandPacket 19 packetId 0 11 3 (ThreadIdPacketData threadId)
+resumeThreadCommand packetId threadId = CommandPacket 19 packetId 0 11 3 (toStrict $ runPut $ putThreadId threadId)
 
 eventSetRequest :: PacketId -> EventKind -> SuspendPolicy -> [EventModifier] -> Packet
 eventSetRequest packetId ek sp ems = CommandPacket
-                                        (11 + (lengthOfPacketData packetData))
-                                        packetId 0 15 1 packetData
-    where packetData = EventRequestSetPacketData ek sp ems
+                                        (11 + (6 + lengthOfEventModifiers))
+                                        packetId 0 15 1 (toStrict $ runPut $ putEventRequest ek sp ems)
+                            where lengthOfEventModifiers = (foldr (+) 0 (map lengthOfEventModifier ems))
 
 
 capabilitiesCommand :: PacketId -> Packet
-capabilitiesCommand packetId = CommandPacket 11 packetId 0 1 12 EmptyPacketData
+capabilitiesCommand packetId = CommandPacket 11 packetId 0 1 12 B.empty
 
 capabilitiesNewCommand :: PacketId -> Packet
-capabilitiesNewCommand packetId = CommandPacket 11 packetId 0 1 17 EmptyPacketData
+capabilitiesNewCommand packetId = CommandPacket 11 packetId 0 1 17 B.empty
 
 -- }}}
 ------------Jdwp communication functions
@@ -577,20 +496,20 @@ handshake h = do
     when (value /= (B8.pack "JDWP-Handshake")) $ fail "Handshake FAILED."
     liftIO $ putStrLn "Handshake successful."
 
-receivePacket :: Handle -> IdSizes -> ReplyDataParser -> IO Packet
-receivePacket h idsizes f = do
+receivePacket :: Handle -> IO Packet
+receivePacket h = do
     inputAvailable <- hWaitForInput h (-1)
     if inputAvailable
-    then do lengthString <- B.hGet h 4
+    then do lengthString <- LB.hGet h 4
             let l = (fromIntegral $ runGet (parseInt) lengthString) - 4
-            reminder <- B.hGet h l
-            let p = runGet (parsePacket idsizes f) (lengthString `B.append` reminder)
+            reminder <- LB.hGet h l
+            let p = runGet parsePacket (lengthString `LB.append` reminder)
             return p
     else error "No input available where expected"
 
-waitReply :: Handle -> IdSizes -> ReplyDataParser -> IO Packet
-waitReply h idsizes f = do
-    packet <- receivePacket h idsizes f
+waitReply :: Handle -> IO Packet
+waitReply h = do
+    packet <- receivePacket h
     case packet of
         CommandPacket _ _ _ _ _ _ -> error "reply expected, but command received"
         {- Normally here some queue should be implemented, but currectly for brevity
@@ -598,34 +517,17 @@ waitReply h idsizes f = do
          -}
         ReplyPacket _ _ _ _ _ -> return packet
 
-waitEvent :: Handle -> IdSizes -> IO Packet
-waitEvent h idsizes = do
-    packet <- receivePacket h idsizes $ \_ -> error "ReplyDataParser is invoked where only command parsing is expected"
+waitEvent :: Handle -> IO Packet
+waitEvent h = do
+    packet <- receivePacket h
     case packet of
         CommandPacket _ _ _ _ _ _ -> return packet
         ReplyPacket _ _ _ _ _ -> error "CommandPacket is expected, but reply packet received"
 
--- When we parse this event we don't have information about size of threadId.
--- We use the fact that threadId is the last field in the event and we can determine its size
--- as request_length - length_of_fields_before_threadId.
--- for current version of JDWP length_of_fields_before_threadIs is 21.
-waitVmStartEvent :: Handle -> IO Packet
-waitVmStartEvent h = do
-    inputAvailable <- hWaitForInput h (-1)
-    if inputAvailable
-    then do putStrLn "Waiting for VmStartEvent"
-            lengthString <- B.hGet h 4
-            let l = (fromIntegral $ runGet (parseInt) lengthString) - 4
-            reminder <- B.hGet h l
-            let threadIdSize = fromIntegral $ (l + 4) - 21
-            let replyParser = \_ -> error "ReplyDataParser is not expected to be invoked."
-            let p = runGet (parsePacket (IdSizes 0 0 threadIdSize 0 0) replyParser) (lengthString `B.append` reminder)
-            return p
-    else error "No input available where expected"
-
 sendPacket :: Handle -> Packet -> IO ()
 sendPacket h p = do
-    B.hPut h $ runPut $ putPacket p
+    LB.hPut h $ runPut $ putPacket p
+    B.hPut h $ dat p
     hFlush h
 
 -- }}}
