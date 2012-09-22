@@ -284,4 +284,17 @@ allClasses = do
     r <- J.dat `liftM` (liftIO $ J.waitReply h)
     let classes = runGet (J.parseAllClassesReply idsizes) (J.toLazy r)
     return classes
+
+type ThreadReference = J.ThreadReference
+
+allThreads :: MonadIO m => VirtualMachine m [ThreadReference]
+allThreads = do
+    h <- getVmHandle
+    idsizes <- getIdSizes
+    cntr <- yieldPacketIdCounter
+    liftIO $ J.sendPacket h $ J.allThreadsCommand cntr
+    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    let threads = runGet (J.parseAllThreadsReply idsizes) (J.toLazy r)
+    return threads
+
 -- vim: foldmethod=marker foldmarker={{{,}}}

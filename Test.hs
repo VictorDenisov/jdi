@@ -23,3 +23,5 @@ main = do
         liftIO $ putStrLn $ show es
         classes <- allClasses
         liftIO $ putStrLn $ intercalate "\n" (map show classes)
+        threads <- allThreads
+        liftIO $ putStrLn $ intercalate "\n" (map show threads)

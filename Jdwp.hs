@@ -285,6 +285,9 @@ newtype ClassStatus = ClassStatus JavaInt
 data ReferenceType = ReferenceType TypeTag JavaReferenceTypeId JavaString ClassStatus
                      deriving (Eq, Show)
 
+data ThreadReference = ThreadReference JavaThreadId
+                       deriving (Eq, Show)
+
 data Capabilities = Capabilities
     { canWatchFieldModification        :: JavaBoolean
     , canWatchFieldAccess              :: JavaBoolean
@@ -459,6 +462,15 @@ parseAllClassesReply idsizes = do
     classes <- mapM (\_ -> parseReferenceType idsizes) [1..classCount]
     return classes
 
+parseThreadReference :: IdSizes -> Get ThreadReference
+parseThreadReference idsizes = ThreadReference <$> (parseThreadId $ threadIdSize idsizes)
+
+parseAllThreadsReply :: IdSizes -> Get [ThreadReference]
+parseAllThreadsReply idsizes = do
+    threadCount <- parseInt
+    threads <- mapM (\_ -> parseThreadReference idsizes) [1..threadCount]
+    return threads
+
 putEventRequest :: EventKind -> SuspendPolicy -> [EventModifier] -> Put
 putEventRequest ek sp ems = do
     putEventKind ek
@@ -501,6 +513,9 @@ capabilitiesNewCommand packetId = CommandPacket 11 packetId 0 1 17 B.empty
 
 allClassesCommand :: PacketId -> Packet
 allClassesCommand packetId = CommandPacket 11 packetId 0 1 3 B.empty
+
+allThreadsCommand :: PacketId -> Packet
+allThreadsCommand packetId = CommandPacket 11 packetId 0 1 4 B.empty
 
 -- }}}
 ------------Jdwp communication functions
