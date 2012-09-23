@@ -322,4 +322,16 @@ exit exitCode = do
     liftIO $ J.waitReply h
     return ()
 
+type ThreadGroupReference = J.ThreadGroupReference
+
+topLevelThreadGroups :: MonadIO m => VirtualMachine m [ThreadGroupReference]
+topLevelThreadGroups = do
+    h <- getVmHandle
+    cntr <- yieldPacketIdCounter
+    idsizes <- getIdSizes
+    liftIO $ J.sendPacket h $ J.topLevelThreadGroupsCommand cntr
+    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    let groups = runGet (J.parseThreadGroupsReply idsizes) (J.toLazy r)
+    return groups
+
 -- vim: foldmethod=marker foldmarker={{{,}}}

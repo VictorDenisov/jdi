@@ -27,4 +27,6 @@ main = do
         liftIO $ putStrLn $ intercalate "\n" (map show threads)
         filteredClasses <- classesByName "java.io.BufferedReader"
         liftIO $ putStrLn $ intercalate "\n" (map show filteredClasses)
+        threadGroups <- topLevelThreadGroups
+        liftIO $ putStrLn $ intercalate "\n" (map show threadGroups)
         exit 12

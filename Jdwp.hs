@@ -79,6 +79,7 @@ type JavaLong            = Word64
 type JavaString          = String
 type JavaBoolean         = Bool
 type JavaThreadId        = JavaObjectId
+type JavaThreadGroupId   = JavaObjectId
 type JavaClassId         = JavaReferenceTypeId
 data JavaFieldId         = JavaFieldId JavaInt Word64 deriving (Show, Eq)
 data JavaMethodId        = JavaMethodId JavaInt Word64 deriving (Show, Eq)
@@ -182,6 +183,12 @@ putThreadId = putObjectId
 parseThreadId :: JavaInt -> Get JavaThreadId
 parseThreadId = parseObjectId
 
+putThreadGroupId :: JavaThreadGroupId -> Put
+putThreadGroupId = putObjectId
+
+parseThreadGroupId :: JavaInt -> Get JavaThreadGroupId
+parseThreadGroupId = parseObjectId
+
 putClassId :: JavaClassId -> Put
 putClassId = putReferenceTypeId
 
@@ -206,6 +213,9 @@ data IdSizes = IdSizes
 
 threadIdSize :: IdSizes -> JavaInt
 threadIdSize is = objectIdSize is
+
+threadGroupIdSize :: IdSizes -> JavaInt
+threadGroupIdSize is = objectIdSize is
 
 data EventSet = EventSet
               { suspendPolicy :: SuspendPolicy
@@ -287,6 +297,9 @@ data ReferenceType = ReferenceType TypeTag JavaReferenceTypeId JavaString ClassS
 
 data ThreadReference = ThreadReference JavaThreadId
                        deriving (Eq, Show)
+
+data ThreadGroupReference = ThreadGroupReference JavaThreadGroupId
+                            deriving (Eq, Show)
 
 data Capabilities = Capabilities
     { canWatchFieldModification        :: JavaBoolean
@@ -490,6 +503,16 @@ parseAllThreadsReply idsizes = do
     threads <- mapM (\_ -> parseThreadReference idsizes) [1..threadCount]
     return threads
 
+parseThreadGroupReference :: IdSizes -> Get ThreadGroupReference
+parseThreadGroupReference idsizes =
+    ThreadGroupReference <$> (parseThreadGroupId $ threadGroupIdSize idsizes)
+
+parseThreadGroupsReply :: IdSizes -> Get [ThreadGroupReference]
+parseThreadGroupsReply idsizes = do
+    groupCount <- parseInt
+    groups <- mapM (\_ -> parseThreadGroupReference idsizes) [1..groupCount]
+    return groups
+
 putEventRequest :: EventKind -> SuspendPolicy -> [EventModifier] -> Put
 putEventRequest ek sp ems = do
     putEventKind ek
@@ -553,6 +576,9 @@ classesBySignatureCommand packetId jniName =
 exitCommand :: PacketId -> JavaInt -> Packet
 exitCommand packetId exitCode =
     CommandPacket (11 + 4) packetId 0 1 10 (toStrict $ runPut $ put exitCode)
+
+topLevelThreadGroupsCommand :: PacketId -> Packet
+topLevelThreadGroupsCommand packetId = CommandPacket 11 packetId 0 1 5 B.empty
 
 -- }}}
 ------------Jdwp communication functions
