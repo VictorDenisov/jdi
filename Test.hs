@@ -29,4 +29,4 @@ main = do
         liftIO $ putStrLn $ intercalate "\n" (map show filteredClasses)
         threadGroups <- topLevelThreadGroups
         liftIO $ putStrLn $ intercalate "\n" (map show threadGroups)
-        exit 12
+        dispose

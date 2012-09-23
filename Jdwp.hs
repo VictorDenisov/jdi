@@ -580,6 +580,9 @@ exitCommand packetId exitCode =
 topLevelThreadGroupsCommand :: PacketId -> Packet
 topLevelThreadGroupsCommand packetId = CommandPacket 11 packetId 0 1 5 B.empty
 
+disposeCommand :: PacketId -> Packet
+disposeCommand packetId = CommandPacket 11 packetId 0 1 6 B.empty
+
 -- }}}
 ------------Jdwp communication functions
 -- {{{

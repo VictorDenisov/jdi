@@ -334,4 +334,12 @@ topLevelThreadGroups = do
     let groups = runGet (J.parseThreadGroupsReply idsizes) (J.toLazy r)
     return groups
 
+dispose :: MonadIO m => VirtualMachine m ()
+dispose = do
+    h <- getVmHandle
+    cntr <- yieldPacketIdCounter
+    liftIO $ J.sendPacket h $ J.disposeCommand cntr
+    liftIO $ J.waitReply h
+    return ()
+
 -- vim: foldmethod=marker foldmarker={{{,}}}
