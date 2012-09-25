@@ -212,6 +212,7 @@ resume = do
     return ()
 
 data EventRequest = ClassPrepareRequest EventRequest
+                  | BreakpointRequest EventRequest
                   | EventRequest J.SuspendPolicy
                   | RequestDescriptor J.EventKind J.JavaInt
                     deriving (Show, Eq)
@@ -225,9 +226,20 @@ enable (ClassPrepareRequest (EventRequest suspendPolicy)) = do
     r <- J.dat `liftM` (liftIO $ J.waitReply h)
     let requestId = runGet J.parseInt (J.toLazy r)
     return $ RequestDescriptor J.ClassPrepare requestId
+enable (BreakpointRequest (EventRequest suspendPolicy)) = do
+    h <- getVmHandle
+    idsizes <- getIdSizes
+    cntr <- yieldPacketIdCounter
+    liftIO $ J.sendPacket h $ J.eventSetRequest cntr J.Breakpoint suspendPolicy []
+    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    let requestId = runGet J.parseInt (J.toLazy r)
+    return $ RequestDescriptor J.Breakpoint requestId
 
 createClassPrepareRequest :: EventRequest
 createClassPrepareRequest = ClassPrepareRequest $ EventRequest J.SuspendAll
+
+createBreakpointRequest :: Location -> EventRequest
+createBreakpointRequest = BreakpointRequest $ EventRequest J.
 
 canAddMethod :: MonadIO m => VirtualMachine m Bool
 canAddMethod = J.canAddMethod `liftM` getCapabilities
