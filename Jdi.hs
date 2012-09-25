@@ -311,7 +311,7 @@ classesByName name = do
     where
         replaceDot '.' = '/'
         replaceDot x = x
-        setSignature newSig (J.ReferenceType tt ri sig cs) =
+        setSignature newSig (J.ReferenceType tt ri _ cs) =
             J.ReferenceType tt ri newSig cs
 
 exit :: MonadIO m => Int -> VirtualMachine m ()
@@ -341,5 +341,17 @@ dispose = do
     liftIO $ J.sendPacket h $ J.disposeCommand cntr
     liftIO $ J.waitReply h
     return ()
+
+type Method = J.Method
+
+allMethods :: MonadIO m => ReferenceType -> VirtualMachine m [Method]
+allMethods (J.ReferenceType _ refId _ _) = do
+    h <- getVmHandle
+    cntr <- yieldPacketIdCounter
+    idsizes <- getIdSizes
+    liftIO $ J.sendPacket h $ J.methodsCommand cntr refId
+    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    let methods = runGet (J.parseMethodsReply idsizes) (J.toLazy r)
+    return methods
 
 -- vim: foldmethod=marker foldmarker={{{,}}}

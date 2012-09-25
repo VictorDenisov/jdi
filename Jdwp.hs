@@ -295,6 +295,9 @@ newtype ClassStatus = ClassStatus JavaInt
 data ReferenceType = ReferenceType TypeTag JavaReferenceTypeId JavaString ClassStatus
                      deriving (Eq, Show)
 
+data Method = Method JavaMethodId String String JavaInt -- methodId name signature modBits
+              deriving (Eq, Show)
+
 data ThreadReference = ThreadReference JavaThreadId
                        deriving (Eq, Show)
 
@@ -481,18 +484,28 @@ parseReferenceTypeNoSignature idsizes =
         <*> (return "")
         <*> parseClassStatus
 
+parseMethod :: IdSizes -> Get Method
+parseMethod idsizes =
+    Method
+        <$> (parseMethodId $ methodIdSize idsizes)
+        <*> parseString
+        <*> parseString
+        <*> parseInt
+
+parseMethodsReply :: IdSizes -> Get [Method]
+parseMethodsReply idsizes = do
+    methodCount <- parseInt
+    mapM (\_ -> parseMethod idsizes) [1..methodCount]
 
 parseAllClassesReply :: IdSizes -> Get [ReferenceType]
 parseAllClassesReply idsizes = do
     classCount <- parseInt
-    classes <- mapM (\_ -> parseReferenceType idsizes) [1..classCount]
-    return classes
+    mapM (\_ -> parseReferenceType idsizes) [1..classCount]
 
 parseClassesBySignatureReply :: IdSizes -> Get [ReferenceType]
 parseClassesBySignatureReply idsizes = do
     classCount <- parseInt
-    classes <- mapM (\_ -> parseReferenceTypeNoSignature idsizes) [1..classCount]
-    return classes
+    mapM (\_ -> parseReferenceTypeNoSignature idsizes) [1..classCount]
 
 parseThreadReference :: IdSizes -> Get ThreadReference
 parseThreadReference idsizes = ThreadReference <$> (parseThreadId $ threadIdSize idsizes)
@@ -500,8 +513,7 @@ parseThreadReference idsizes = ThreadReference <$> (parseThreadId $ threadIdSize
 parseAllThreadsReply :: IdSizes -> Get [ThreadReference]
 parseAllThreadsReply idsizes = do
     threadCount <- parseInt
-    threads <- mapM (\_ -> parseThreadReference idsizes) [1..threadCount]
-    return threads
+    mapM (\_ -> parseThreadReference idsizes) [1..threadCount]
 
 parseThreadGroupReference :: IdSizes -> Get ThreadGroupReference
 parseThreadGroupReference idsizes =
@@ -510,8 +522,7 @@ parseThreadGroupReference idsizes =
 parseThreadGroupsReply :: IdSizes -> Get [ThreadGroupReference]
 parseThreadGroupsReply idsizes = do
     groupCount <- parseInt
-    groups <- mapM (\_ -> parseThreadGroupReference idsizes) [1..groupCount]
-    return groups
+    mapM (\_ -> parseThreadGroupReference idsizes) [1..groupCount]
 
 putEventRequest :: EventKind -> SuspendPolicy -> [EventModifier] -> Put
 putEventRequest ek sp ems = do
@@ -582,6 +593,13 @@ topLevelThreadGroupsCommand packetId = CommandPacket 11 packetId 0 1 5 B.empty
 
 disposeCommand :: PacketId -> Packet
 disposeCommand packetId = CommandPacket 11 packetId 0 1 6 B.empty
+
+methodsCommand :: PacketId -> JavaReferenceTypeId -> Packet
+methodsCommand packetId typeId@(JavaReferenceTypeId size _) =
+    CommandPacket
+        (11 + size)
+        packetId 0 2 5
+        (toStrict $ runPut $ putReferenceTypeId typeId)
 
 -- }}}
 ------------Jdwp communication functions

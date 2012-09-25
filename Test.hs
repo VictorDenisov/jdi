@@ -29,4 +29,7 @@ main = do
         liftIO $ putStrLn $ intercalate "\n" (map show filteredClasses)
         threadGroups <- topLevelThreadGroups
         liftIO $ putStrLn $ intercalate "\n" (map show threadGroups)
+        methods <- allMethods $ head classes
+        liftIO $ putStrLn $ "Methods for class " ++ (show $ head classes)
+        liftIO $ putStrLn $ intercalate "\n" (map show methods)
         dispose
