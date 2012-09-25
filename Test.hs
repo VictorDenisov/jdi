@@ -1,4 +1,5 @@
 import Jdi
+import qualified Jdwp as J
 
 import Network.Socket.Internal (PortNumber(..))
 import Network
@@ -15,12 +16,9 @@ main = do
         liftIO $ putStrLn $ show es
         rd <- enable createClassPrepareRequest
         liftIO $ putStrLn $ show rd
-        resume
-        es <- removeEvent
-        liftIO $ putStrLn $ show es
-        resume
-        es <- removeEvent
-        liftIO $ putStrLn $ show es
+
+        mainClass <- pollEvents
+
         classes <- allClasses
         liftIO $ putStrLn $ intercalate "\n" (map show classes)
         threads <- allThreads
@@ -33,3 +31,14 @@ main = do
         liftIO $ putStrLn $ "Methods for class " ++ (show $ head classes)
         liftIO $ putStrLn $ intercalate "\n" (map show methods)
         dispose
+
+pollEvents = do
+    resume
+    es <- removeEvent
+    liftIO $ putStrLn $ show es
+    if isMainPrepareEvent (head $ J.events es)
+    then return ()
+    else pollEvents
+
+isMainPrepareEvent (J.ClassPrepareEvent _ _ _ _ "LMain;" _) = True
+isMainPrepareEvent _ = False
