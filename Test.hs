@@ -34,6 +34,7 @@ main = do
         liftIO . putStrLn $ "Methods for class " ++ (show mainClass)
         liftIO . putStrLn $ intercalate "\n" (map show methods)
         liftIO . putStrLn =<< vmName
+        liftIO . putStrLn =<< (name $ head methods)
         dispose
 
 pollEvents = do

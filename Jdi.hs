@@ -167,6 +167,9 @@ releaseResources = do
 initialConfiguration :: Handle -> Configuration
 initialConfiguration h = Configuration Nothing 0 h S.empty Nothing Nothing
 
+class Name a where
+    name :: MonadIO m => a -> VirtualMachine m String
+
 --- Auxiliary functions
 runVersionCommand :: MonadIO m => VirtualMachine m J.Version
 runVersionCommand = do
@@ -343,6 +346,9 @@ dispose = do
     return ()
 
 type Method = J.Method
+
+instance Name J.Method where
+    name (J.Method _ name _ _) = return name
 
 allMethods :: MonadIO m => ReferenceType -> VirtualMachine m [Method]
 allMethods (J.ReferenceType _ refId _ _) = do
