@@ -37,6 +37,9 @@ main = do
         liftIO . putStrLn =<< vmName
         liftIO . putStrLn =<< (name $ head methods)
         forM_ threads (\thread -> liftIO . putStrLn =<< name thread)
+        let method = last methods
+        lineTable <- allLineLocations method
+        liftIO . putStrLn $ show lineTable
         dispose
 
 pollEvents = do

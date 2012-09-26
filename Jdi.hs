@@ -354,19 +354,32 @@ dispose = do
     liftIO $ J.waitReply h
     return ()
 
-type Method = J.Method
+data Method = Method J.ReferenceType J.Method
+              deriving (Eq, Show)
 
-instance Name J.Method where
-    name (J.Method _ name _ _) = return name
+instance Name Method where
+    name (Method _ (J.Method _ name _ _)) = return name
 
 allMethods :: MonadIO m => ReferenceType -> VirtualMachine m [Method]
-allMethods (J.ReferenceType _ refId _ _) = do
+allMethods rt@(J.ReferenceType _ refId _ _) = do
     h <- getVmHandle
     cntr <- yieldPacketIdCounter
     idsizes <- getIdSizes
     liftIO $ J.sendPacket h $ J.methodsCommand cntr refId
     r <- J.dat `liftM` (liftIO $ J.waitReply h)
     let methods = runGet (J.parseMethodsReply idsizes) (J.toLazy r)
-    return methods
+    return $ map (Method rt) methods
+
+type Location = J.Line
+
+allLineLocations :: MonadIO m => Method -> VirtualMachine m [Location]
+allLineLocations (Method (J.ReferenceType _ refId _ _)
+                         (J.Method mId _ _ _)) = do
+    h <- getVmHandle
+    cntr <- yieldPacketIdCounter
+    liftIO $ J.sendPacket h $ J.lineTableCommand cntr refId mId
+    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    let (J.LineTable _ _ lines) = runGet J.parseLineTableReply (J.toLazy r)
+    return lines
 
 -- vim: foldmethod=marker foldmarker={{{,}}}

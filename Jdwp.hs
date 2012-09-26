@@ -304,6 +304,12 @@ data ThreadReference = ThreadReference JavaThreadId
 data ThreadGroupReference = ThreadGroupReference JavaThreadGroupId
                             deriving (Eq, Show)
 
+data LineTable = LineTable JavaLong JavaLong [Line] -- start end lines
+                 deriving (Eq, Show)
+
+data Line = Line JavaLong JavaInt -- codeIndex number
+            deriving (Eq, Show)
+
 data Capabilities = Capabilities
     { canWatchFieldModification        :: JavaBoolean
     , canWatchFieldAccess              :: JavaBoolean
@@ -524,6 +530,17 @@ parseThreadGroupsReply idsizes = do
     groupCount <- parseInt
     mapM (\_ -> parseThreadGroupReference idsizes) [1..groupCount]
 
+parseLineTableReply :: Get LineTable
+parseLineTableReply = do
+    start <- parseLong
+    end   <- parseLong
+    lineCount <- parseInt
+    lines <- mapM (\_ -> parseLine) [1..lineCount]
+    return $ LineTable start end lines
+
+parseLine :: Get Line
+parseLine = Line <$> parseLong <*> parseInt
+
 putEventRequest :: EventKind -> SuspendPolicy -> [EventModifier] -> Put
 putEventRequest ek sp ems = do
     putEventKind ek
@@ -607,6 +624,17 @@ threadReferenceNameCommand packetId ti@(JavaObjectId size _) =
         (11 + size)
         packetId 0 11 1
         (toStrict $ runPut $ putThreadId ti)
+
+lineTableCommand :: PacketId -> JavaReferenceTypeId -> JavaMethodId -> Packet
+lineTableCommand
+            packetId
+            typeId@(JavaReferenceTypeId rSize _)
+            methodId@(JavaMethodId mSize _)
+    = CommandPacket
+            (11 + rSize + mSize)
+            packetId 0 6 1
+            (toStrict $ runPut $ putReferenceTypeId typeId
+                                 >> putMethodId methodId)
 
 -- }}}
 ------------Jdwp communication functions
