@@ -179,8 +179,8 @@ runVersionCommand = do
 
 --- Functions from official interface
 
-name :: MonadIO m => VirtualMachine m String
-name = J.vmName `liftM` runVersionCommand
+vmName :: MonadIO m => VirtualMachine m String
+vmName = J.vmName `liftM` runVersionCommand
 
 description :: MonadIO m => VirtualMachine m String
 description = J.description `liftM` runVersionCommand
