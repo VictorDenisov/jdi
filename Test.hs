@@ -6,6 +6,7 @@ import Network.Socket.Internal (PortNumber(..))
 import Network
 import Control.Monad.Trans (liftIO, lift)
 import Control.Applicative ((<$>))
+import Control.Monad (forM_)
 import Data.List
 
 main = do
@@ -35,6 +36,7 @@ main = do
         liftIO . putStrLn $ intercalate "\n" (map show methods)
         liftIO . putStrLn =<< vmName
         liftIO . putStrLn =<< (name $ head methods)
+        forM_ threads (\thread -> liftIO . putStrLn =<< name thread)
         dispose
 
 pollEvents = do

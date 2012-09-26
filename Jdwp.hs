@@ -601,6 +601,13 @@ methodsCommand packetId typeId@(JavaReferenceTypeId size _) =
         packetId 0 2 5
         (toStrict $ runPut $ putReferenceTypeId typeId)
 
+threadReferenceNameCommand :: PacketId -> JavaThreadId -> Packet
+threadReferenceNameCommand packetId ti@(JavaObjectId size _) =
+    CommandPacket
+        (11 + size)
+        packetId 0 11 1
+        (toStrict $ runPut $ putThreadId ti)
+
 -- }}}
 ------------Jdwp communication functions
 -- {{{

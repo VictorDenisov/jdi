@@ -290,6 +290,15 @@ allClasses = do
 
 type ThreadReference = J.ThreadReference
 
+instance Name J.ThreadReference where
+    name (J.ThreadReference refId) = do
+        h <- getVmHandle
+        cntr <- yieldPacketIdCounter
+        liftIO $ J.sendPacket h $ J.threadReferenceNameCommand cntr refId
+        r <- J.dat `liftM` (liftIO $ J.waitReply h)
+        let name = runGet J.parseString (J.toLazy r)
+        return name
+
 allThreads :: MonadIO m => VirtualMachine m [ThreadReference]
 allThreads = do
     h <- getVmHandle
