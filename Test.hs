@@ -39,7 +39,7 @@ main = do
         forM_ threads (\thread -> liftIO . putStrLn =<< name thread)
         let method = last methods
         lineTable <- allLineLocations method
-        liftIO . putStrLn $ show lineTable
+        liftIO . putStrLn $ intercalate "\n" (map show lineTable)
         dispose
 
 pollEvents = do
