@@ -126,6 +126,12 @@ putLocation (JavaLocation typeTag classId methodId index) = do
     putMethodId methodId
     put index
 
+parseLocation :: IdSizes -> Get JavaLocation
+parseLocation is = JavaLocation <$> parseTypeTag
+                                <*> parseClassId (referenceTypeIdSize is)
+                                <*> parseMethodId (methodIdSize is)
+                                <*> parseLong
+
 putDynamicSizedValue :: JavaInt -> Word64 -> Put
 putDynamicSizedValue s v = case s of
     1 -> put ((fromIntegral v) :: Word8)
@@ -236,6 +242,11 @@ data Event = VmStartEvent
                 , typeId      :: JavaReferenceTypeId
                 , signature   :: JavaString
                 , classStatus :: ClassStatus
+                }
+           | BreakpointEvent
+                { requestId :: JavaInt
+                , threadId  :: JavaThreadId
+                , location  :: JavaLocation
                 }
            | NoEvent
              deriving (Show, Eq)
@@ -477,6 +488,9 @@ parseEvent idsizes = do
                             <*> (parseReferenceTypeId $ referenceTypeIdSize idsizes)
                             <*> parseString
                             <*> parseClassStatus
+        Breakpoint -> BreakpointEvent <$> parseInt
+                                      <*> parseThreadId (threadIdSize idsizes)
+                                      <*> parseLocation idsizes
         VmInit  -> VmStartEvent <$> parseInt <*> (parseThreadId $ threadIdSize idsizes)
         VmDeath -> VmDeathEvent <$> parseInt
         _       -> return NoEvent
