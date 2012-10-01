@@ -40,7 +40,11 @@ main = do
         let method = last methods
         lineTable <- allLineLocations method
         liftIO . putStrLn $ intercalate "\n" (map show lineTable)
-        dispose
+        bpr <- enable $ createBreakpointRequest (head lineTable)
+
+        pollEvents
+
+        --dispose
 
 pollEvents = do
     resume

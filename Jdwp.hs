@@ -332,12 +332,19 @@ lengthOfJavaString :: JavaString -> Word32
 lengthOfJavaString s = 4 + (fromIntegral $ length s)
 
 lengthOfEventModifier :: EventModifier -> Word32
-lengthOfEventModifier (Count _) = 1 + 4;
-lengthOfEventModifier (Conditional _) = 1 + 4;
-lengthOfEventModifier (ThreadOnly (JavaObjectId l v)) = 1 + l;
-lengthOfEventModifier (ClassOnly (JavaReferenceTypeId l v)) = 1 + l;
-lengthOfEventModifier (ClassMatch s) = 1 + 4 + fromIntegral (length s);
-lengthOfEventModifier (ClassExclude s) = 1 + 4 + fromIntegral (length s);
+lengthOfEventModifier (Count _) = 1 + 4
+lengthOfEventModifier (Conditional _) = 1 + 4
+lengthOfEventModifier (ThreadOnly (JavaObjectId l v)) = 1 + l
+lengthOfEventModifier (ClassOnly (JavaReferenceTypeId l v)) = 1 + l
+lengthOfEventModifier (ClassMatch s) = 1 + 4 + fromIntegral (length s)
+lengthOfEventModifier (ClassExclude s) = 1 + 4 + fromIntegral (length s)
+lengthOfEventModifier (LocationOnly
+                            (JavaLocation _
+                                          (JavaReferenceTypeId refSize _)
+                                          (JavaMethodId mSize _)
+                                          _
+                            )
+                      ) = 1 + 1 + refSize + mSize + 8
 lengthOfEventModifier _ = error "unhandled size yet"
 
 fromNumber :: [(JavaByte, a)] -> JavaByte -> a

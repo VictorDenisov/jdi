@@ -212,7 +212,7 @@ resume = do
     return ()
 
 data EventRequest = ClassPrepareRequest EventRequest
-                  | BreakpointRequest EventRequest
+                  | BreakpointRequest EventRequest Location
                   | EventRequest J.SuspendPolicy
                   | RequestDescriptor J.EventKind J.JavaInt
                     deriving (Show, Eq)
@@ -220,26 +220,33 @@ data EventRequest = ClassPrepareRequest EventRequest
 enable :: MonadIO m => EventRequest -> VirtualMachine m EventRequest
 enable (ClassPrepareRequest (EventRequest suspendPolicy)) = do
     h <- getVmHandle
-    idsizes <- getIdSizes
     cntr <- yieldPacketIdCounter
     liftIO $ J.sendPacket h $ J.eventSetRequest cntr J.ClassPrepare suspendPolicy []
     r <- J.dat `liftM` (liftIO $ J.waitReply h)
     let requestId = runGet J.parseInt (J.toLazy r)
     return $ RequestDescriptor J.ClassPrepare requestId
-enable (BreakpointRequest (EventRequest suspendPolicy)) = do
+enable (BreakpointRequest
+                (EventRequest suspendPolicy)
+                (Location (J.ReferenceType typeTag refId _ _)
+                          (J.Method mId _ _ _)
+                          (J.Line codeIndex lineNum))) = do
     h <- getVmHandle
-    idsizes <- getIdSizes
     cntr <- yieldPacketIdCounter
-    liftIO $ J.sendPacket h $ J.eventSetRequest cntr J.Breakpoint suspendPolicy []
+    let modifiers = [J.LocationOnly (J.JavaLocation typeTag refId mId codeIndex)]
+    let packet = J.eventSetRequest cntr J.Breakpoint suspendPolicy modifiers
+    liftIO . putStrLn $ "sent packet: " ++ (show packet)
+    liftIO $ J.sendPacket h packet
     r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    liftIO . putStrLn $ "received packet" ++ (show r)
     let requestId = runGet J.parseInt (J.toLazy r)
+    liftIO . putStrLn $ show requestId
     return $ RequestDescriptor J.Breakpoint requestId
 
 createClassPrepareRequest :: EventRequest
 createClassPrepareRequest = ClassPrepareRequest $ EventRequest J.SuspendAll
 
 createBreakpointRequest :: Location -> EventRequest
-createBreakpointRequest = BreakpointRequest $ EventRequest J.
+createBreakpointRequest = BreakpointRequest $ EventRequest J.SuspendAll
 
 canAddMethod :: MonadIO m => VirtualMachine m Bool
 canAddMethod = J.canAddMethod `liftM` getCapabilities
