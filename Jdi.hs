@@ -392,14 +392,23 @@ allMethods rt@(J.ReferenceType _ refId _ _) = do
 data Location = Location J.ReferenceType J.Method J.Line
                 deriving (Show, Eq)
 
-allLineLocations :: MonadIO m => Method -> VirtualMachine m [Location]
-allLineLocations (Method reference@(J.ReferenceType _ refId _ _)
-                         method@(J.Method mId _ _ _)) = do
+receiveLineTable :: MonadIO m => Method -> VirtualMachine m J.LineTable
+receiveLineTable (Method (J.ReferenceType _ refId _ _)
+                         (J.Method mId _ _ _)) = do
     h <- getVmHandle
     cntr <- yieldPacketIdCounter
     liftIO $ J.sendPacket h $ J.lineTableCommand cntr refId mId
     r <- J.dat `liftM` (liftIO $ J.waitReply h)
-    let (J.LineTable _ _ lines) = runGet J.parseLineTableReply (J.toLazy r)
-    return $ map (Location reference method) lines
+    return $ runGet J.parseLineTableReply (J.toLazy r)
+
+allLineLocations :: MonadIO m => Method -> VirtualMachine m [Location]
+allLineLocations m@(Method ref method) = do
+    (J.LineTable _ _ lines) <- receiveLineTable m
+    return $ map (Location ref method) lines
+
+location :: MonadIO m => Method -> VirtualMachine m Location
+location m@(Method ref method) = do
+    (J.LineTable _ _ lines) <- receiveLineTable m
+    return $ Location ref method (head lines)
 
 -- vim: foldmethod=marker foldmarker={{{,}}}

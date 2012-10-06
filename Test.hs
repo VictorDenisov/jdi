@@ -37,10 +37,11 @@ main = do
         liftIO . putStrLn =<< vmName
         liftIO . putStrLn =<< (name $ head methods)
         forM_ threads (\thread -> liftIO . putStrLn =<< name thread)
-        let method = last methods
-        lineTable <- allLineLocations method
+        let methodMain = last methods
+        lineTable <- allLineLocations methodMain
+        mainLocation <- location methodMain
         liftIO . putStrLn $ intercalate "\n" (map show lineTable)
-        bpr <- enable $ createBreakpointRequest (head lineTable)
+        bpr <- enable $ createBreakpointRequest mainLocation
 
         pollEvents
 
