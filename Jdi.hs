@@ -1,4 +1,45 @@
-module Jdi where
+module Jdi
+( runVirtualMachine
+, vmName
+, description
+, version
+, removeEvent
+, resume
+, EventRequest
+, enable
+, createClassPrepareRequest
+, createBreakpointRequest
+, canAddMethod
+, canBeModified
+, canGetBytecodes
+, canGetCurrentContendedMonitor
+, canGetMonitorInfo
+, canGetOwnedMonitorInfo
+, canGetSourceDebugExtension
+, canGetSynteticAttribute
+, canPopFrames
+, canRedefineClasses
+, canRequestVmDeathEvent
+, canUnrestrictedlyRedefineClasses
+, canUseInstanceFilters
+, canWatchFieldAccess
+, canWatchFieldModification
+, ReferenceType
+, allClasses
+, ThreadReference
+, allThreads
+, classesByName
+, exit
+, ThreadGroupReference
+, topLevelThreadGroups
+, dispose
+, Method
+, Name(..)
+, allMethods
+, Location
+, allLineLocations
+, location
+) where
 
 import Control.Monad.State (StateT(..), MonadState(..), evalStateT)
 import Control.Monad.Error (ErrorT, runErrorT)
@@ -179,6 +220,14 @@ runVersionCommand = do
     p <- liftIO $ J.waitReply h
     return $ runGet J.parseVersion (J.toLazy $ J.dat p)
     
+receiveLineTable :: MonadIO m => Method -> VirtualMachine m J.LineTable
+receiveLineTable (Method (J.ReferenceType _ refId _ _)
+                         (J.Method mId _ _ _)) = do
+    h <- getVmHandle
+    cntr <- yieldPacketIdCounter
+    liftIO $ J.sendPacket h $ J.lineTableCommand cntr refId mId
+    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    return $ runGet J.parseLineTableReply (J.toLazy r)
 
 --- Functions from official interface
 
@@ -391,15 +440,6 @@ allMethods rt@(J.ReferenceType _ refId _ _) = do
 
 data Location = Location J.ReferenceType J.Method J.Line
                 deriving (Show, Eq)
-
-receiveLineTable :: MonadIO m => Method -> VirtualMachine m J.LineTable
-receiveLineTable (Method (J.ReferenceType _ refId _ _)
-                         (J.Method mId _ _ _)) = do
-    h <- getVmHandle
-    cntr <- yieldPacketIdCounter
-    liftIO $ J.sendPacket h $ J.lineTableCommand cntr refId mId
-    r <- J.dat `liftM` (liftIO $ J.waitReply h)
-    return $ runGet J.parseLineTableReply (J.toLazy r)
 
 allLineLocations :: MonadIO m => Method -> VirtualMachine m [Location]
 allLineLocations m@(Method ref method) = do
