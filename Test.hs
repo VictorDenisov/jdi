@@ -51,8 +51,8 @@ pollEvents = do
     es <- removeEvent
     liftIO $ putStrLn $ show es
     if isMainPrepareEvent (head $ J.events es)
-    then return ()
-    else pollEvents
+        then return ()
+        else pollEvents
 
 isMainPrepareEvent (J.ClassPrepareEvent _ _ _ _ "LMain;" _) = True
 isMainPrepareEvent _ = False

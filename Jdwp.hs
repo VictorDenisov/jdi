@@ -47,15 +47,15 @@ parsePacket = do
     i <- get
     f <- get
     if (f .&. 0x80) == 0
-    then do
-        cs <- get
-        c  <- get
-        d  <- getByteString (fromIntegral l - packetHeaderSize)
-        return (CommandPacket l i f cs c d)
-    else do
-        e <- get
-        d <- getByteString (fromIntegral l - packetHeaderSize)
-        return (ReplyPacket l i f e d)
+        then do
+            cs <- get
+            c  <- get
+            d  <- getByteString (fromIntegral l - packetHeaderSize)
+            return (CommandPacket l i f cs c d)
+        else do
+            e <- get
+            d <- getByteString (fromIntegral l - packetHeaderSize)
+            return (ReplyPacket l i f e d)
 
 putPacket :: Packet -> Put
 putPacket (CommandPacket l i f cs c d) = do
@@ -674,12 +674,12 @@ receivePacket :: Handle -> IO Packet
 receivePacket h = do
     inputAvailable <- hWaitForInput h (-1)
     if inputAvailable
-    then do lengthString <- LB.hGet h 4
-            let l = (fromIntegral $ runGet (parseInt) lengthString) - 4
-            reminder <- LB.hGet h l
-            let p = runGet parsePacket (lengthString `LB.append` reminder)
-            return p
-    else error "No input available where expected"
+        then do lengthString <- LB.hGet h 4
+                let l = (fromIntegral $ runGet (parseInt) lengthString) - 4
+                reminder <- LB.hGet h l
+                let p = runGet parsePacket (lengthString `LB.append` reminder)
+                return p
+        else error "No input available where expected"
 
 waitReply :: Handle -> IO Packet
 waitReply h = do

@@ -156,8 +156,8 @@ askCapabilities = do
     idsizes <- getIdSizes
     jdwpVersion <- getJdwpVersion
     if jdwpVersion >= (JdwpVersion 1 4)
-    then liftIO $ J.sendPacket h $ J.capabilitiesNewCommand cntr
-    else liftIO $ J.sendPacket h $ J.capabilitiesCommand cntr
+        then liftIO $ J.sendPacket h $ J.capabilitiesNewCommand cntr
+        else liftIO $ J.sendPacket h $ J.capabilitiesCommand cntr
 
 releaseResources :: MonadIO m => VirtualMachine m ()
 releaseResources = do
@@ -197,10 +197,10 @@ removeEvent = do
     idsizes <- getIdSizes
     qe <- queueEmpty
     if qe
-    then do
-        eventSetData <- J.dat `liftM` (liftIO $ J.waitEvent h)
-        return $ runGet (J.parseEventSet idsizes) (J.toLazy eventSetData)
-    else takeFromQueue
+        then do
+            eventSetData <- J.dat `liftM` (liftIO $ J.waitEvent h)
+            return $ runGet (J.parseEventSet idsizes) (J.toLazy eventSetData)
+        else takeFromQueue
 
 resume :: MonadIO m => VirtualMachine m ()
 resume = do
