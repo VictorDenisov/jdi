@@ -2,18 +2,18 @@ Name:           jdi
 Version:        0.0.1
 Description:    Implementation of Java Debug Interface
 Synopsis:       Implementation of Java Debug Interface
-Copyright:	2012 Victor Denisov
+Copyright:      2012 Victor Denisov
 License:        GPL-2
 License-file:   LICENSE
 Author:	        Victor Denisov <denisovenator@gmail.com>
 Maintainer:     Victor Denisov <denisovenator@gmail.com>
-Build-type:     Simple
+Build-type:     Custom
 Homepage:       https://github.com/VictorDenisov/jdi
 Category:       Debug
 Cabal-version:  >=1.4
 
 Executable Test
-        main-is:        Test.hs
+        main-is:        Tests/Test.hs
         build-depends:  base >= 3
 
 Library
