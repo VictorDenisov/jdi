@@ -25,3 +25,4 @@ Library
                                 transformers >= 0.3.0.0,
                                 mtl >= 2.1.2,
                                 network >= 2.3.0.14
+        other-modules:          Jdwp

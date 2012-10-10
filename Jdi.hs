@@ -1,5 +1,6 @@
 module Jdi
-( runVirtualMachine
+( VirtualMachine
+, runVirtualMachine
 , vmName
 , description
 , version
@@ -39,6 +40,8 @@ module Jdi
 , Location
 , allLineLocations
 , location
+, J.EventSet(..)
+, J.SuspendPolicy(..)
 ) where
 
 import Control.Monad.State (StateT(..), MonadState(..), evalStateT)

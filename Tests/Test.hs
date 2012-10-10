@@ -14,6 +14,10 @@ main = do
         jdv <- version
         liftIO . putStrLn $ "JdwpVersion: " ++ (show jdv)
         es <- removeEvent
+        liftIO . putStrLn $ show $ case suspendPolicy es of
+                                        SuspendAll -> "this is suspend all"
+                                        SuspendNone -> "this is suspend none"
+                                        SuspendEventThread -> "this is suspend event thread"
         liftIO . putStrLn $ show es
         rd <- enable createClassPrepareRequest
         liftIO . putStrLn $ show rd
@@ -49,7 +53,7 @@ pollEvents = do
     resume
     es <- removeEvent
     liftIO $ putStrLn $ show es
-    if isMainPrepareEvent (head $ J.events es)
+    if isMainPrepareEvent (head $ events es)
         then return ()
         else pollEvents
 

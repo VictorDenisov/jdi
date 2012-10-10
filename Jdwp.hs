@@ -273,7 +273,7 @@ data EventKind = VmDisconnected
                | VmDeath
                  deriving (Eq, Show)
 
-data SuspendPolicy = SuspenNone
+data SuspendPolicy = SuspendNone
                    | SuspendEventThread
                    | SuspendAll
                      deriving (Eq, Show)
@@ -390,7 +390,7 @@ eventKindNumbers = [ (  1, SingleStep)
                    ]
 
 suspendPolicyNumbers :: [(JavaByte, SuspendPolicy)]
-suspendPolicyNumbers = [ (0, SuspenNone)
+suspendPolicyNumbers = [ (0, SuspendNone)
                        , (1, SuspendEventThread)
                        , (2, SuspendAll)
                        ]
