@@ -225,6 +225,7 @@ threadGroupIdSize is = objectIdSize is
 
 data EventSet = EventSet
               { suspendPolicy :: SuspendPolicy
+                -- | In essence this function is eventIterator from JDI.
               , events        :: [Event]
               } deriving (Show, Eq)
 

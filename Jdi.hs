@@ -233,7 +233,7 @@ receiveLineTable (Method (J.ReferenceType _ refId _ _)
     return $ runGet J.parseLineTableReply (J.toLazy r)
 
 --- Functions from official interface
-
+-- {{{
 vmName :: MonadIO m => VirtualMachine m String
 vmName = J.vmName `liftM` runVersionCommand
 
@@ -453,5 +453,5 @@ location :: MonadIO m => Method -> VirtualMachine m Location
 location m@(Method ref method) = do
     (J.LineTable _ _ lines) <- receiveLineTable m
     return $ Location ref method (head lines)
-
+-- }}}
 -- vim: foldmethod=marker foldmarker={{{,}}}
