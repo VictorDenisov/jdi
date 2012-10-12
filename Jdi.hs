@@ -373,13 +373,16 @@ instance Name J.ThreadReference where
         let name = runGet J.parseString (J.toLazy r)
         return name
 
+resumeThreadId :: MonadIO m => J.JavaThreadId -> VirtualMachine m ()
+resumeThreadId tId = do
+    h <- getVmHandle
+    cntr <- yieldPacketIdCounter
+    liftIO $ J.sendPacket h $ J.resumeThreadCommand cntr tId
+    r <- liftIO $ J.waitReply h
+    return ()
+
 instance Resumable J.ThreadReference where
-    resume (J.ThreadReference tId) = do
-        h <- getVmHandle
-        cntr <- yieldPacketIdCounter
-        liftIO $ J.sendPacket h $ J.resumeThreadCommand cntr tId
-        r <- liftIO $ J.waitReply h
-        return ()
+    resume (J.ThreadReference tId) = resumeThreadId tId
 
 allThreads :: MonadIO m => VirtualMachine m [J.ThreadReference]
 allThreads = do
@@ -462,5 +465,11 @@ location :: MonadIO m => Method -> VirtualMachine m Location
 location m@(Method ref method) = do
     (J.LineTable _ _ lines) <- receiveLineTable m
     return $ Location ref method (head lines)
+
+instance Resumable J.EventSet where
+    resume (J.EventSet J.SuspendAll _) = resumeVm
+    resume (J.EventSet J.SuspendEventThread events)
+                                        = resumeThreadId $ J.threadId $ head events
+    resume (J.EventSet J.SuspendNone _) = return ()
 -- }}}
 -- vim: foldmethod=marker foldmarker={{{,}}}
