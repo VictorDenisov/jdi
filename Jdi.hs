@@ -5,7 +5,7 @@ module Jdi
 , description
 , version
 , removeEvent
-, resume
+, resumeVm
 , EventRequest
 , enable
 , createClassPrepareRequest
@@ -256,8 +256,8 @@ removeEvent = do
             return $ runGet (J.parseEventSet idsizes) (J.toLazy eventSetData)
         else takeFromQueue
 
-resume :: MonadIO m => VirtualMachine m ()
-resume = do
+resumeVm :: MonadIO m => VirtualMachine m ()
+resumeVm = do
     h <- getVmHandle
     cntr <- yieldPacketIdCounter
     idsizes <- getIdSizes

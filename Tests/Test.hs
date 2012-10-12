@@ -50,7 +50,7 @@ main = do
         --dispose
 
 pollEvents = do
-    resume
+    resumeVm
     es <- removeEvent
     liftIO $ putStrLn $ show es
     if isMainPrepareEvent (head $ events es)
