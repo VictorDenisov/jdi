@@ -36,6 +36,7 @@ module Jdi
 , dispose
 , Method
 , Name(..)
+, Resumable(..)
 , allMethods
 , Location
 , allLineLocations
@@ -44,6 +45,7 @@ module Jdi
 , J.Event
 , J.eventKind
 , J.SuspendPolicy(..)
+, J.EventKind(..)
 ) where
 
 import Control.Monad.State (StateT(..), MonadState(..), evalStateT)
