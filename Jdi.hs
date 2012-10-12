@@ -487,5 +487,10 @@ referenceType (J.Event _ _ (J.ClassPrepareEvent
                                                         typeId
                                                         signature
                                                         classStatus
+
+thread :: J.Event -> J.ThreadReference
+thread (J.Event _ _ (J.ClassPrepareEvent
+                                threadId
+                                _ _ _ _)) = J.ThreadReference threadId
 -- }}}
 -- vim: foldmethod=marker foldmarker={{{,}}}
