@@ -238,7 +238,7 @@ data Event = Event EventKind JavaInt Event
                     JavaThreadId
                     TypeTag
                     JavaReferenceTypeId
-                    JavaString
+                    JavaString -- signature
                     ClassStatus
            | BreakpointEvent
                     JavaThreadId

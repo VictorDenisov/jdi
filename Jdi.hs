@@ -471,7 +471,21 @@ location m@(Method ref method) = do
 instance Resumable J.EventSet where
     resume (J.EventSet J.SuspendAll _) = resumeVm
     resume (J.EventSet J.SuspendEventThread events)
-                                        = resumeThreadId $ J.threadId $ head events
+                                       = resumeThreadId
+                                       $ J.threadId
+                                       $ head events
     resume (J.EventSet J.SuspendNone _) = return ()
+
+referenceType :: J.Event -> J.ReferenceType
+referenceType (J.Event _ _ (J.ClassPrepareEvent
+                                threadId
+                                typeTag
+                                typeId
+                                signature
+                                classStatus)) = J.ReferenceType
+                                                        typeTag
+                                                        typeId
+                                                        signature
+                                                        classStatus
 -- }}}
 -- vim: foldmethod=marker foldmarker={{{,}}}
