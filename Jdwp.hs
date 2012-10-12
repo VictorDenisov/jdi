@@ -246,6 +246,9 @@ data Event = Event EventKind JavaInt Event
            | NoEvent
              deriving (Show, Eq)
 
+eventKind :: Event -> EventKind
+eventKind (Event ek _ _) = ek
+
 data EventKind = VmDisconnected
                | VmStart
                | ThreadDeath

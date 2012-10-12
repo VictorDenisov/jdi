@@ -41,6 +41,8 @@ module Jdi
 , allLineLocations
 , location
 , J.EventSet(..)
+, J.Event
+, J.eventKind
 , J.SuspendPolicy(..)
 ) where
 
