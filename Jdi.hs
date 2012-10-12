@@ -27,11 +27,11 @@ module Jdi
 , canWatchFieldModification
 , ReferenceType
 , allClasses
-, ThreadReference
+, J.ThreadReference
 , allThreads
 , classesByName
 , exit
-, ThreadGroupReference
+, J.ThreadGroupReference
 , topLevelThreadGroups
 , dispose
 , Method
@@ -216,6 +216,9 @@ initialConfiguration h = Configuration Nothing 0 h S.empty Nothing Nothing
 class Name a where
     name :: MonadIO m => a -> VirtualMachine m String
 
+class Resumable a where
+    resume :: MonadIO m => a -> VirtualMachine m ()
+
 --- Auxiliary functions
 runVersionCommand :: MonadIO m => VirtualMachine m J.Version
 runVersionCommand = do
@@ -361,8 +364,6 @@ allClasses = do
     let classes = runGet (J.parseAllClassesReply idsizes) (J.toLazy r)
     return classes
 
-type ThreadReference = J.ThreadReference
-
 instance Name J.ThreadReference where
     name (J.ThreadReference refId) = do
         h <- getVmHandle
@@ -372,7 +373,15 @@ instance Name J.ThreadReference where
         let name = runGet J.parseString (J.toLazy r)
         return name
 
-allThreads :: MonadIO m => VirtualMachine m [ThreadReference]
+instance Resumable J.ThreadReference where
+    resume (J.ThreadReference tId) = do
+        h <- getVmHandle
+        cntr <- yieldPacketIdCounter
+        liftIO $ J.sendPacket h $ J.resumeThreadCommand cntr tId
+        r <- liftIO $ J.waitReply h
+        return ()
+
+allThreads :: MonadIO m => VirtualMachine m [J.ThreadReference]
 allThreads = do
     h <- getVmHandle
     idsizes <- getIdSizes
@@ -407,9 +416,7 @@ exit exitCode = do
     liftIO $ J.waitReply h
     return ()
 
-type ThreadGroupReference = J.ThreadGroupReference
-
-topLevelThreadGroups :: MonadIO m => VirtualMachine m [ThreadGroupReference]
+topLevelThreadGroups :: MonadIO m => VirtualMachine m [J.ThreadGroupReference]
 topLevelThreadGroups = do
     h <- getVmHandle
     cntr <- yieldPacketIdCounter
@@ -455,5 +462,6 @@ location :: MonadIO m => Method -> VirtualMachine m Location
 location m@(Method ref method) = do
     (J.LineTable _ _ lines) <- receiveLineTable m
     return $ Location ref method (head lines)
+
 -- }}}
 -- vim: foldmethod=marker foldmarker={{{,}}}
