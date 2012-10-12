@@ -57,7 +57,7 @@ pollEvents = do
         then return ()
         else pollEvents
 
-isMainPrepareEvent (J.ClassPrepareEvent _ _ _ _ "LMain;" _) = True
+isMainPrepareEvent (J.Event _ _ (J.ClassPrepareEvent _ _ _ "LMain;" _)) = True
 isMainPrepareEvent _ = False
 
 isMainClass (J.ReferenceType _ _ "LMain;" _) = True
