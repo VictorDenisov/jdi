@@ -246,6 +246,12 @@ data Event = Event EventKind JavaInt Event
            | NoEvent
              deriving (Show, Eq)
 
+threadId :: Event -> JavaThreadId
+threadId (Event _ _ e) = threadId e
+threadId (VmStartEvent ti) = ti
+threadId (ClassPrepareEvent ti _ _ _ _) = ti
+threadId (BreakpointEvent ti _) = ti
+
 eventKind :: Event -> EventKind
 eventKind (Event ek _ _) = ek
 

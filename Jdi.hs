@@ -462,6 +462,5 @@ location :: MonadIO m => Method -> VirtualMachine m Location
 location m@(Method ref method) = do
     (J.LineTable _ _ lines) <- receiveLineTable m
     return $ Location ref method (head lines)
-
 -- }}}
 -- vim: foldmethod=marker foldmarker={{{,}}}
