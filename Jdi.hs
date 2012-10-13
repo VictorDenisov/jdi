@@ -302,6 +302,10 @@ enable (EventRequest suspendPolicy Nothing request@(BreakpointRequest
     liftIO . putStrLn $ show requestId
     return $ EventRequest suspendPolicy (Just requestId) request
 
+isEnabled :: EventRequest -> Bool
+isEnabled (EventRequest _ (Just _) _) = True
+isEnabled (EventRequest _ Nothing _)  = False
+
 createClassPrepareRequest :: EventRequest
 createClassPrepareRequest = EventRequest J.SuspendAll Nothing ClassPrepareRequest
 
