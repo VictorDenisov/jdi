@@ -1,6 +1,5 @@
 module Main where
 import Jdi
-import qualified Jdwp as J
 
 import Network.Socket.Internal (PortNumber(..))
 import Network
@@ -32,7 +31,7 @@ main = do
         liftIO . putStrLn $ intercalate "\n" (map show filteredClasses)
         threadGroups <- topLevelThreadGroups
         liftIO . putStrLn $ intercalate "\n" (map show threadGroups)
-        mainClass <- head <$> filterM isMainClass classes
+        let mainClass = head $ filter isMainClass classes
         methods <- allMethods mainClass
         liftIO . putStrLn $ "Methods for class " ++ (show mainClass)
         liftIO . putStrLn $ intercalate "\n" (map show methods)
@@ -57,7 +56,8 @@ pollEvents = do
         then return ()
         else pollEvents
 
-isMainPrepareEvent (J.Event _ _ (J.ClassPrepareEvent _ _ _ "LMain;" _)) = True
-isMainPrepareEvent _ = False
+isMainPrepareEvent e = case (eventKind e) of
+    ClassPrepare -> isMainClass $ referenceType e
+    _ -> False
 
-isMainClass ref = ("LMain;" ==) <$> genericSignature ref
+isMainClass ref = "LMain;" == genericSignature ref

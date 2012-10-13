@@ -42,6 +42,8 @@ module Jdi
 , Location
 , allLineLocations
 , location
+, referenceType
+, thread
 , J.EventSet(..)
 , J.Event
 , J.eventKind
@@ -353,8 +355,8 @@ canWatchFieldAccess = J.canWatchFieldAccess `liftM` getCapabilities
 canWatchFieldModification :: MonadIO m => VirtualMachine m Bool
 canWatchFieldModification = J.canWatchFieldModification `liftM` getCapabilities
 
-genericSignature :: MonadIO m => J.ReferenceType -> VirtualMachine m String
-genericSignature (J.ReferenceType _ _ gs _) = return gs
+genericSignature :: J.ReferenceType -> String
+genericSignature (J.ReferenceType _ _ gs _) = gs
 
 allClasses :: MonadIO m => VirtualMachine m [J.ReferenceType]
 allClasses = do
