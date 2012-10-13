@@ -6,7 +6,7 @@ import Network.Socket.Internal (PortNumber(..))
 import Network
 import Control.Monad.Trans (liftIO, lift)
 import Control.Applicative ((<$>))
-import Control.Monad (forM_)
+import Control.Monad (forM_, filterM)
 import Data.List
 
 main = do
@@ -32,7 +32,7 @@ main = do
         liftIO . putStrLn $ intercalate "\n" (map show filteredClasses)
         threadGroups <- topLevelThreadGroups
         liftIO . putStrLn $ intercalate "\n" (map show threadGroups)
-        let mainClass = head $ filter isMainClass classes
+        mainClass <- head <$> filterM isMainClass classes
         methods <- allMethods mainClass
         liftIO . putStrLn $ "Methods for class " ++ (show mainClass)
         liftIO . putStrLn $ intercalate "\n" (map show methods)
@@ -60,5 +60,4 @@ pollEvents = do
 isMainPrepareEvent (J.Event _ _ (J.ClassPrepareEvent _ _ _ "LMain;" _)) = True
 isMainPrepareEvent _ = False
 
-isMainClass (J.ReferenceType _ _ "LMain;" _) = True
-isMainClass _ = False
+isMainClass ref = ("LMain;" ==) <$> genericSignature ref

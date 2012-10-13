@@ -25,7 +25,8 @@ module Jdi
 , canUseInstanceFilters
 , canWatchFieldAccess
 , canWatchFieldModification
-, ReferenceType
+, J.ReferenceType
+, genericSignature
 , allClasses
 , J.ThreadReference
 , allThreads
@@ -352,9 +353,10 @@ canWatchFieldAccess = J.canWatchFieldAccess `liftM` getCapabilities
 canWatchFieldModification :: MonadIO m => VirtualMachine m Bool
 canWatchFieldModification = J.canWatchFieldModification `liftM` getCapabilities
 
-type ReferenceType = J.ReferenceType
+genericSignature :: MonadIO m => J.ReferenceType -> VirtualMachine m String
+genericSignature (J.ReferenceType _ _ gs _) = return gs
 
-allClasses :: MonadIO m => VirtualMachine m [ReferenceType]
+allClasses :: MonadIO m => VirtualMachine m [J.ReferenceType]
 allClasses = do
     h <- getVmHandle
     idsizes <- getIdSizes
@@ -394,7 +396,7 @@ allThreads = do
     let threads = runGet (J.parseAllThreadsReply idsizes) (J.toLazy r)
     return threads
 
-classesByName :: MonadIO m => String -> VirtualMachine m [ReferenceType]
+classesByName :: MonadIO m => String -> VirtualMachine m [J.ReferenceType]
 classesByName name = do
     let jniName = "L" ++ (map replaceDot name) ++ ";"
     h <- getVmHandle
@@ -443,7 +445,7 @@ data Method = Method J.ReferenceType J.Method
 instance Name Method where
     name (Method _ (J.Method _ name _ _)) = return name
 
-allMethods :: MonadIO m => ReferenceType -> VirtualMachine m [Method]
+allMethods :: MonadIO m => J.ReferenceType -> VirtualMachine m [Method]
 allMethods rt@(J.ReferenceType _ refId _ _) = do
     h <- getVmHandle
     cntr <- yieldPacketIdCounter
