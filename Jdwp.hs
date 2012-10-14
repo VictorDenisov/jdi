@@ -230,30 +230,35 @@ data EventSet = EventSet
               } deriving (Show, Eq)
 
 --                event kind, requestId, event kind specific data
-data Event = Event EventKind JavaInt Event
-           | VmStartEvent
+data Event = VmStartEvent
+                    JavaInt
                     JavaThreadId
            | VmDeathEvent
+                    JavaInt
            | ClassPrepareEvent
+                    JavaInt
                     JavaThreadId
                     TypeTag
                     JavaReferenceTypeId
                     JavaString -- signature
                     ClassStatus
            | BreakpointEvent
+                    JavaInt
                     JavaThreadId
                     JavaLocation
            | NoEvent
              deriving (Show, Eq)
 
 threadId :: Event -> JavaThreadId
-threadId (Event _ _ e) = threadId e
-threadId (VmStartEvent ti) = ti
-threadId (ClassPrepareEvent ti _ _ _ _) = ti
-threadId (BreakpointEvent ti _) = ti
+threadId (VmStartEvent _ ti) = ti
+threadId (ClassPrepareEvent _ ti _ _ _ _) = ti
+threadId (BreakpointEvent _ ti _) = ti
 
 eventKind :: Event -> EventKind
-eventKind (Event ek _ _) = ek
+eventKind (VmStartEvent {})= VmStart
+eventKind (VmDeathEvent {})= VmDeath
+eventKind (ClassPrepareEvent {})= ClassPrepare
+eventKind (BreakpointEvent {})= Breakpoint
 
 data EventKind = VmDisconnected
                | VmStart
@@ -484,20 +489,24 @@ parseEventSet idsizes = do
 parseEvent :: IdSizes -> Get Event
 parseEvent idsizes = do
     eventKind <- parseEventKind
-    Event eventKind <$> parseInt <*>
-        case eventKind of
-            ClassPrepare -> ClassPrepareEvent
-                                <$> (parseThreadId $ threadIdSize idsizes)
-                                <*> parseTypeTag
-                                <*> (parseReferenceTypeId $ referenceTypeIdSize idsizes)
-                                <*> parseString
-                                <*> parseClassStatus
-            Breakpoint -> BreakpointEvent
-                                <$> parseThreadId (threadIdSize idsizes)
-                                <*> parseLocation idsizes
-            VmInit  -> VmStartEvent <$> (parseThreadId $ threadIdSize idsizes)
-            VmDeath -> return VmDeathEvent
-            _       -> return NoEvent
+    case eventKind of
+        ClassPrepare -> ClassPrepareEvent
+                            <$> parseInt
+                            <*> (parseThreadId $ threadIdSize idsizes)
+                            <*> parseTypeTag
+                            <*> (parseReferenceTypeId $ referenceTypeIdSize idsizes)
+                            <*> parseString
+                            <*> parseClassStatus
+        Breakpoint -> BreakpointEvent
+                            <$> parseInt
+                            <*> parseThreadId (threadIdSize idsizes)
+                            <*> parseLocation idsizes
+        VmInit  -> VmStartEvent
+                            <$> parseInt
+                            <*> (parseThreadId $ threadIdSize idsizes)
+        VmDeath -> VmDeathEvent
+                            <$> parseInt
+        _       -> return NoEvent
 
 parseReferenceType :: IdSizes -> Get ReferenceType
 parseReferenceType idsizes =

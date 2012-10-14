@@ -483,20 +483,22 @@ instance Resumable J.EventSet where
     resume (J.EventSet J.SuspendNone _) = return ()
 
 referenceType :: J.Event -> J.ReferenceType
-referenceType (J.Event _ _ (J.ClassPrepareEvent
-                                threadId
-                                typeTag
-                                typeId
-                                signature
-                                classStatus)) = J.ReferenceType
-                                                        typeTag
-                                                        typeId
-                                                        signature
-                                                        classStatus
+referenceType (J.ClassPrepareEvent
+                    _
+                    threadId
+                    typeTag
+                    typeId
+                    signature
+                    classStatus) = J.ReferenceType
+                                            typeTag
+                                            typeId
+                                            signature
+                                            classStatus
 
 thread :: J.Event -> J.ThreadReference
-thread (J.Event _ _ (J.ClassPrepareEvent
-                                threadId
-                                _ _ _ _)) = J.ThreadReference threadId
+thread (J.ClassPrepareEvent
+            _
+            threadId
+            _ _ _ _) = J.ThreadReference threadId
 -- }}}
 -- vim: foldmethod=marker foldmarker={{{,}}}
