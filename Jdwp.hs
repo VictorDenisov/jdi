@@ -582,6 +582,11 @@ putEventRequest ek sp ems = do
     put ((fromIntegral $ length ems)  :: JavaInt)
     mapM_ putEventModifier ems
 
+putClearEvent :: EventKind -> JavaInt -> Put
+putClearEvent ek requestId = do
+    putEventKind ek
+    put requestId
+
 toStrict :: LB.ByteString -> B.ByteString
 toStrict = B.concat . LB.toChunks
 
@@ -602,15 +607,32 @@ resumeVmCommand packetId = CommandPacket 11 packetId 0 1 9 B.empty
 resumeThreadCommand :: PacketId -> JavaThreadId -> Packet
 resumeThreadCommand packetId threadId = CommandPacket 19 packetId 0 11 3 (toStrict $ runPut $ putThreadId threadId)
 
-eventSetRequest :: PacketId -> EventKind -> SuspendPolicy -> [EventModifier] -> Packet
-eventSetRequest packetId ek sp ems = CommandPacket
-                                        (11 + (6 + lengthOfEventModifiers))
-                                        packetId
-                                        0
-                                        15
-                                        1
-                                        (toStrict $ runPut $ putEventRequest ek sp ems)
-                            where lengthOfEventModifiers = (foldr (+) 0 (map lengthOfEventModifier ems))
+eventSetRequest :: PacketId
+                -> EventKind
+                -> SuspendPolicy
+                -> [EventModifier]
+                -> Packet
+eventSetRequest packetId ek sp ems =
+    CommandPacket
+        (11 + (6 + lengthOfEventModifiers))
+        packetId
+        0
+        15
+        1
+        (toStrict $ runPut $ putEventRequest ek sp ems)
+    where
+        lengthOfEventModifiers = (foldr (+) 0 (map lengthOfEventModifier ems))
+
+eventClearRequest :: PacketId -> EventKind -> JavaInt -> Packet
+eventClearRequest packetId ek requestId =
+    CommandPacket
+        (11 + 5)
+        packetId
+        0
+        15
+        2
+        (toStrict $ runPut $ putClearEvent ek requestId)
+       
 
 
 capabilitiesCommand :: PacketId -> Packet

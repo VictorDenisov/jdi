@@ -294,17 +294,24 @@ enable (EventRequest suspendPolicy Nothing request@(BreakpointRequest
     cntr <- yieldPacketIdCounter
     let modifiers = [J.LocationOnly (J.JavaLocation typeTag refId mId codeIndex)]
     let packet = J.eventSetRequest cntr J.Breakpoint suspendPolicy modifiers
-    liftIO . putStrLn $ "sent packet: " ++ (show packet)
     liftIO $ J.sendPacket h packet
     r <- J.dat `liftM` (liftIO $ J.waitReply h)
-    liftIO . putStrLn $ "received packet" ++ (show r)
     let requestId = runGet J.parseInt (J.toLazy r)
-    liftIO . putStrLn $ show requestId
     return $ EventRequest suspendPolicy (Just requestId) request
 
 isEnabled :: EventRequest -> Bool
 isEnabled (EventRequest _ (Just _) _) = True
 isEnabled (EventRequest _ Nothing _)  = False
+
+disable :: MonadIO m => EventRequest -> VirtualMachine m EventRequest
+disable (EventRequest suspendPolicy (Just requestId) er@(ClassPrepareRequest{})) = do
+    h <- getVmHandle
+    cntr <- yieldPacketIdCounter
+    let packet = J.eventClearRequest cntr J.ClassPrepare requestId
+    liftIO $ J.sendPacket h packet
+    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    return $ EventRequest suspendPolicy Nothing er
+    
 
 createClassPrepareRequest :: EventRequest
 createClassPrepareRequest = EventRequest J.SuspendAll Nothing ClassPrepareRequest
