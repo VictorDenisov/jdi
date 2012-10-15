@@ -59,10 +59,10 @@ import Network (connectTo, PortID)
 import qualified Data.Map as M
 import Network.Socket.Internal (PortNumber(..))
 import GHC.IO.Handle (Handle, hClose, hSetBinaryMode, hPutStr, hFlush)
-import Control.Monad.Trans (liftIO, lift)
+import Control.Monad.Trans (liftIO, lift, MonadTrans)
 import Control.Monad.IO.Class (MonadIO)
-import Control.Applicative ((<$>))
-import Control.Monad (liftM)
+import Control.Applicative ((<$>), Applicative(..))
+import Control.Monad (liftM, ap)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as B8
 import Data.Binary.Get (runGet)
@@ -70,7 +70,21 @@ import Data.Binary.Put (runPut)
 import GHC.IO.Handle (hWaitForInput)
 import qualified Data.Sequence as S
 
-type VirtualMachine m = StateT Configuration (ErrorT String m)
+newtype VirtualMachine m a = VirtualMachine
+    { unVm :: StateT Configuration (ErrorT String m) a }
+    deriving (Monad, MonadIO)
+
+deriving instance Monad m => MonadState Configuration (VirtualMachine m)
+
+instance Monad m => Functor (VirtualMachine m) where
+    fmap = liftM
+
+instance Monad m => Applicative (VirtualMachine m) where
+    pure = return
+    (<*>) = ap
+
+instance MonadTrans VirtualMachine where
+    lift = VirtualMachine . lift . lift
 
 -- Configuration description
 ---- {{{
@@ -170,7 +184,7 @@ runVirtualMachine host port vm = do
     h <- liftIO $ connectTo host port
     liftIO $ hSetBinaryMode h True
     result <- runErrorT $ runStateT
-                            ((lift (J.handshake h)) >> (preflight >> vm >> releaseResources))
+                            (unVm ((VirtualMachine (lift (J.handshake h))) >> (preflight >> vm >> releaseResources)))
                             (initialConfiguration h)
     case result of
         Right ((), state) -> return ()

@@ -45,6 +45,7 @@ main = do
         bpr <- enable $ createBreakpointRequest mainLocation
 
         pollEvents
+        lift . putStrLn $ "Exiting"
 
         --dispose
 
@@ -52,12 +53,12 @@ pollEvents = do
     resumeVm
     es <- removeEvent
     liftIO $ putStrLn $ show es
-    if isMainPrepareEvent (head $ events es)
-        then return ()
-        else pollEvents
-
-isMainPrepareEvent e = case (eventKind e) of
-    ClassPrepare -> isMainClass $ referenceType e
-    _ -> False
+    let e = head $ events es
+    case eventKind e of
+        ClassPrepare -> if isMainClass $ referenceType e
+                            then return ()
+                            else pollEvents
+        VmDeath -> return ()
+        _ -> pollEvents
 
 isMainClass ref = "LMain;" == genericSignature ref

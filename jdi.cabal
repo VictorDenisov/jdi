@@ -15,6 +15,9 @@ Cabal-version:  >=1.4
 Executable Test
         main-is:        Tests/Test.hs
         build-depends:  base >= 3
+        extensions:     MultiParamTypeClasses
+                      , GeneralizedNewtypeDeriving
+                      , StandaloneDeriving
 
 Library
         exposed-modules:        Jdi
@@ -26,3 +29,6 @@ Library
                                 mtl >= 2.1.2,
                                 network >= 2.3.0.14
         other-modules:          Jdwp
+        extensions:             MultiParamTypeClasses
+                              , GeneralizedNewtypeDeriving
+                              , StandaloneDeriving
