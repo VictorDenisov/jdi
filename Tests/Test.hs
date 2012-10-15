@@ -24,7 +24,8 @@ main = do
         mainClass <- pollEvents
 
         classes <- allClasses
-        liftIO . putStrLn $ intercalate "\n" (map show classes)
+        cNames <- mapM name classes
+        liftIO . putStrLn $ intercalate "\n" cNames
         threads <- allThreads
         liftIO . putStrLn $ intercalate "\n" (map show threads)
         filteredClasses <- classesByName "java.io.BufferedReader"

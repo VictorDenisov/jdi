@@ -383,6 +383,24 @@ canWatchFieldModification = J.canWatchFieldModification `liftM` getCapabilities
 genericSignature :: J.ReferenceType -> String
 genericSignature (J.ReferenceType _ _ gs _) = gs
 
+signatureToName :: String -> String
+signatureToName "Z" = "boolean"
+signatureToName "B" = "byte"
+signatureToName "C" = "char"
+signatureToName "S" = "short"
+signatureToName "I" = "int"
+signatureToName "J" = "long"
+signatureToName "F" = "float"
+signatureToName "D" = "double"
+signatureToName ('L' : v) = (flip map) (init v) $
+    \x -> case x of
+        '/' -> '.'
+        v   -> v
+signatureToName ('[' : v) = (signatureToName v) ++ "[]"
+
+instance Name J.ReferenceType where
+    name = return . signatureToName . genericSignature
+
 allClasses :: MonadIO m => VirtualMachine m [J.ReferenceType]
 allClasses = do
     h <- getVmHandle
