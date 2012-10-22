@@ -43,6 +43,8 @@ main = do
         lineTable <- allLineLocations methodMain
         mainLocation <- location methodMain
         liftIO . putStrLn $ intercalate "\n" (map show lineTable)
+        classLineLocations <- allLineLocations mainClass
+        liftIO . putStrLn $ intercalate "\n" (map show classLineLocations)
         bpr <- enable $ createBreakpointRequest mainLocation
 
         pollEvents

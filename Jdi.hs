@@ -53,7 +53,7 @@ module Jdi
 
 import Control.Monad.State (StateT(..), MonadState(..), evalStateT)
 import Control.Monad.Error (ErrorT, runErrorT)
-import Control.Monad (guard, when)
+import Control.Monad (guard, when, mapM)
 import qualified Jdwp as J
 import Network (connectTo, PortID)
 import qualified Data.Map as M
@@ -503,10 +503,16 @@ allMethods rt@(J.ReferenceType _ refId _ _) = do
 data Location = Location J.ReferenceType J.Method J.Line
                 deriving (Show, Eq)
 
-allLineLocations :: MonadIO m => Method -> VirtualMachine m [Location]
-allLineLocations m@(Method ref method) = do
-    (J.LineTable _ _ lines) <- receiveLineTable m
-    return $ map (Location ref method) lines
+class AllLineLocations a where
+    allLineLocations :: MonadIO m => a -> VirtualMachine m [Location]
+
+instance AllLineLocations Method where
+    allLineLocations m@(Method ref method) = do
+        (J.LineTable _ _ lines) <- receiveLineTable m
+        return $ map (Location ref method) lines
+
+instance AllLineLocations J.ReferenceType where
+    allLineLocations refType = concat <$> ((mapM allLineLocations) =<< (allMethods refType))
 
 location :: MonadIO m => Method -> VirtualMachine m Location
 location m@(Method ref method) = do
