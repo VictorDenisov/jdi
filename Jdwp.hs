@@ -692,6 +692,14 @@ lineTableCommand
             (toStrict $ runPut $ putReferenceTypeId typeId
                                  >> putMethodId methodId)
 
+sourceFileCommand :: PacketId -> JavaReferenceTypeId -> Packet
+sourceFileCommand
+                packetId
+                typeId@(JavaReferenceTypeId rSize _)
+    = CommandPacket
+        (11 + rSize)
+        packetId 0 2 7
+        (toStrict $ runPut $ putReferenceTypeId typeId)
 -- }}}
 ------------Jdwp communication functions
 -- {{{

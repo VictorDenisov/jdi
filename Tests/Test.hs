@@ -33,6 +33,8 @@ main = do
         threadGroups <- topLevelThreadGroups
         liftIO . putStrLn $ intercalate "\n" (map show threadGroups)
         let mainClass = head $ filter isMainClass classes
+        sName <- sourceName mainClass
+        liftIO . putStrLn $ "Main class source name: " ++ sName
         methods <- allMethods mainClass
         liftIO . putStrLn $ "Methods for class " ++ (show mainClass)
         liftIO . putStrLn $ intercalate "\n" (map show methods)

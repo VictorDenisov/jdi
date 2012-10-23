@@ -40,6 +40,11 @@ module Jdi
 , Resumable(..)
 , allMethods
 , Location
+, codeIndex
+, declaringType
+, lineNumber
+, method
+, sourceName
 , allLineLocations
 , location
 , referenceType
@@ -502,6 +507,34 @@ allMethods rt@(J.ReferenceType _ refId _ _) = do
 
 data Location = Location J.ReferenceType J.Method J.Line
                 deriving (Show, Eq)
+
+codeIndex :: Location -> Int
+codeIndex (Location _ _ (J.Line ci _)) = fromIntegral ci
+
+declaringType :: Location -> J.ReferenceType
+declaringType (Location rt _ _) = rt
+
+lineNumber :: Location -> Int
+lineNumber (Location _ _ (J.Line _ ln)) = fromIntegral ln
+
+method :: Location -> Method
+method (Location refType method _) = Method refType method
+
+class SourceName a where
+    sourceName :: MonadIO m => a -> VirtualMachine m String
+
+instance SourceName Location where
+    sourceName (Location ref _ _) = sourceName ref
+
+instance SourceName J.ReferenceType where
+    sourceName (J.ReferenceType _ refId _ _) = do
+        h <- getVmHandle
+        cntr <- yieldPacketIdCounter
+        idsizes <- getIdSizes
+        liftIO $ J.sendPacket h $ J.sourceFileCommand cntr refId
+        r <- J.dat `liftM` (liftIO $ J.waitReply h)
+        let sourceName = runGet J.parseString (J.toLazy r)
+        return sourceName
 
 class AllLineLocations a where
     allLineLocations :: MonadIO m => a -> VirtualMachine m [Location]
