@@ -10,6 +10,7 @@ module Language.Java.Jdi
 , enable
 , createClassPrepareRequest
 , createBreakpointRequest
+, createStepRequest
 , canAddMethod
 , canBeModified
 , canGetBytecodes
@@ -33,6 +34,8 @@ module Language.Java.Jdi
 , classesByName
 , exit
 , J.ThreadGroupReference
+, J.StepSize(..)
+, J.StepDepth(..)
 , topLevelThreadGroups
 , dispose
 , Method
@@ -292,9 +295,11 @@ resumeVm = do
     r <- liftIO $ J.waitReply h
     return ()
 
+                                 -- Id of event request if it's enabled
 data EventRequest = EventRequest J.SuspendPolicy (Maybe J.JavaInt) EventRequest
                   | ClassPrepareRequest
                   | BreakpointRequest Location
+                  | StepRequest J.ThreadReference J.StepSize J.StepDepth
                     deriving (Show, Eq)
 
 enable :: MonadIO m => EventRequest -> VirtualMachine m EventRequest
@@ -317,6 +322,17 @@ enable (EventRequest suspendPolicy Nothing request@(BreakpointRequest
     r <- J.dat `liftM` (liftIO $ J.waitReply h)
     let requestId = runGet J.parseInt (J.toLazy r)
     return $ EventRequest suspendPolicy (Just requestId) request
+enable (EventRequest suspendPolicy Nothing request@(StepRequest
+                (J.ThreadReference tId) ss sd)) = do
+    h <- getVmHandle
+    cntr <- yieldPacketIdCounter
+    let modifiers = [J.Step tId ss sd]
+    let packet = J.eventSetRequest cntr J.SingleStep suspendPolicy modifiers
+    liftIO $ J.sendPacket h packet
+    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    let requestId = runGet J.parseInt (J.toLazy r)
+    return $ EventRequest suspendPolicy (Just requestId) request
+enable request@(EventRequest suspendPolicy (Just _) _) = return request
 
 isEnabled :: EventRequest -> Bool
 isEnabled (EventRequest _ (Just _) _) = True
@@ -330,13 +346,15 @@ disable (EventRequest suspendPolicy (Just requestId) er@(ClassPrepareRequest{}))
     liftIO $ J.sendPacket h packet
     r <- J.dat `liftM` (liftIO $ J.waitReply h)
     return $ EventRequest suspendPolicy Nothing er
-    
 
 createClassPrepareRequest :: EventRequest
 createClassPrepareRequest = EventRequest J.SuspendAll Nothing ClassPrepareRequest
 
 createBreakpointRequest :: Location -> EventRequest
 createBreakpointRequest l = EventRequest J.SuspendAll Nothing (BreakpointRequest l)
+
+createStepRequest :: J.ThreadReference -> J.StepSize -> J.StepDepth -> EventRequest
+createStepRequest tr ss sd = EventRequest J.SuspendAll Nothing (StepRequest tr ss sd)
 
 canAddMethod :: MonadIO m => VirtualMachine m Bool
 canAddMethod = J.canAddMethod `liftM` getCapabilities
@@ -578,5 +596,9 @@ thread (J.ClassPrepareEvent
             _
             threadId
             _ _ _ _) = J.ThreadReference threadId
+thread (J.BreakpointEvent
+            _
+            threadId
+            _) = J.ThreadReference threadId
 -- }}}
 -- vim: foldmethod=marker foldmarker={{{,}}}

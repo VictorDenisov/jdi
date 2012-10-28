@@ -21,7 +21,9 @@ main = do
         rd <- enable createClassPrepareRequest
         liftIO . putStrLn $ show rd
 
-        mainClass <- pollEvents
+        pollEvents $ \e -> case eventKind e of
+            ClassPrepare -> isMainClass $ referenceType e
+            _ -> False
 
         classes <- allClasses
         cNames <- mapM name classes
@@ -48,22 +50,25 @@ main = do
         classLineLocations <- allLineLocations mainClass
         liftIO . putStrLn $ intercalate "\n" (map show classLineLocations)
         bpr <- enable $ createBreakpointRequest mainLocation
+        ev <- pollEvents $ \e -> case eventKind e of
+            Breakpoint -> True
+            _ -> False
+        spr <- enable $ createStepRequest (thread ev) StepLine StepOver
 
-        pollEvents
+        pollEvents $ \e -> case eventKind e of
+            VmDeath -> True
+            _ -> False
         lift . putStrLn $ "Exiting"
 
         --dispose
 
-pollEvents = do
+pollEvents stopFunction = do
     resumeVm
     es <- removeEvent
     liftIO $ putStrLn $ show es
     let e = head $ events es
-    case eventKind e of
-        ClassPrepare -> if isMainClass $ referenceType e
-                            then return ()
-                            else pollEvents
-        VmDeath -> return ()
-        _ -> pollEvents
+    if stopFunction e
+        then return e
+        else pollEvents stopFunction
 
 isMainClass ref = "LMain;" == genericSignature ref

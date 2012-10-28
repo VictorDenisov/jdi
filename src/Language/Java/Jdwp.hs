@@ -103,6 +103,9 @@ parseByte = get
 parseBoolean :: Get JavaBoolean
 parseBoolean = (/= 0) <$> (get :: Get Word8)
 
+putInt :: JavaInt -> Put
+putInt v = put v
+
 parseInt :: Get JavaInt
 parseInt = get
 
@@ -246,6 +249,10 @@ data Event = VmStartEvent
                     JavaInt
                     JavaThreadId
                     JavaLocation
+           | StepEvent
+                    JavaInt
+                    JavaThreadId
+                    JavaLocation
            | NoEvent
              deriving (Show, Eq)
 
@@ -259,6 +266,7 @@ eventKind (VmStartEvent {})= VmStart
 eventKind (VmDeathEvent {})= VmDeath
 eventKind (ClassPrepareEvent {})= ClassPrepare
 eventKind (BreakpointEvent {})= Breakpoint
+eventKind (StepEvent {})= SingleStep
 
 data EventKind = VmDisconnected
                | VmStart
@@ -298,8 +306,7 @@ data EventModifier = Count JavaInt
                    | ExceptionOnly JavaReferenceTypeId JavaBoolean JavaBoolean
                             -- declaring           fieldId
                    | FieldOnly JavaReferenceTypeId JavaFieldId
-                       -- threadId     size    depth
-                   | Step JavaThreadId JavaInt JavaInt
+                   | Step JavaThreadId StepSize StepDepth
                                -- instance
                    | InstanceOnly JavaObjectId
                      deriving (Show, Eq)
@@ -329,6 +336,15 @@ data LineTable = LineTable JavaLong JavaLong [Line] -- start end lines
 
 data Line = Line JavaLong JavaInt -- codeIndex number
             deriving (Eq, Show)
+
+data StepSize = StepMin
+              | StepLine
+                deriving (Eq, Show)
+
+data StepDepth = StepInto
+               | StepOut
+               | StepOver
+                 deriving (Eq, Show)
 
 data Capabilities = Capabilities
     { canWatchFieldModification        :: JavaBoolean
@@ -365,6 +381,7 @@ lengthOfEventModifier (LocationOnly
                                           _
                             )
                       ) = 1 + 1 + refSize + mSize + 8
+lengthOfEventModifier (Step (JavaObjectId l v) _ _) = 1 + l + 4 + 4
 lengthOfEventModifier _ = error "unhandled size yet"
 
 fromNumber :: [(JavaByte, a)] -> JavaByte -> a
@@ -438,6 +455,17 @@ putTypeTag t = put $ (toNumber typeTagNumbers) t
 parseTypeTag :: Get TypeTag
 parseTypeTag = (fromNumber typeTagNumbers) <$> (get :: Get JavaByte)
 
+--- StepSize
+putStepSize :: StepSize -> Put
+putStepSize StepMin  = putInt 0
+putStepSize StepLine = putInt 1
+
+--- StepDepth
+putStepDepth :: StepDepth -> Put
+putStepDepth StepInto = putInt 0
+putStepDepth StepOver = putInt 1
+putStepDepth StepOut  = putInt 2
+
 --- EventModifier
 putEventModifier :: EventModifier -> Put
 putEventModifier (Count count)               = putByte 1 >> put count
@@ -459,8 +487,8 @@ putEventModifier (FieldOnly declaring fieldId) = do
 putEventModifier (Step threadId size depth) = do
     putByte 10
     putThreadId threadId
-    put size
-    put depth
+    putStepSize size
+    putStepDepth depth
 putEventModifier (InstanceOnly inst) = do
     putByte 11
     putObjectId inst
@@ -498,6 +526,10 @@ parseEvent idsizes = do
                             <*> parseString
                             <*> parseClassStatus
         Breakpoint -> BreakpointEvent
+                            <$> parseInt
+                            <*> parseThreadId (threadIdSize idsizes)
+                            <*> parseLocation idsizes
+        SingleStep -> StepEvent
                             <$> parseInt
                             <*> parseThreadId (threadIdSize idsizes)
                             <*> parseLocation idsizes
