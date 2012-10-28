@@ -1,4 +1,4 @@
-module Jvm.Jdwp where
+module Language.Java.Jdwp where
 
 import Data.Word (Word8, Word16, Word32, Word64)
 import qualified Data.ByteString as B

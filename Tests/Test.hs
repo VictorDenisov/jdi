@@ -1,5 +1,5 @@
 module Main where
-import Jvm.Jdi
+import Language.Java.Jdi
 
 import Network.Socket.Internal (PortNumber(..))
 import Network
