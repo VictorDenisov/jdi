@@ -1,4 +1,4 @@
-module Jdi
+module Jvm.Jdi
 ( VirtualMachine
 , runVirtualMachine
 , vmName
@@ -59,7 +59,7 @@ module Jdi
 import Control.Monad.State (StateT(..), MonadState(..), evalStateT)
 import Control.Monad.Error (ErrorT, runErrorT)
 import Control.Monad (guard, when, mapM)
-import qualified Jdwp as J
+import qualified Jvm.Jdwp as J
 import Network (connectTo, PortID)
 import qualified Data.Map as M
 import Network.Socket.Internal (PortNumber(..))
