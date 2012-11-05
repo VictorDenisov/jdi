@@ -53,6 +53,9 @@ main = do
         ev <- pollEvents $ \e -> case eventKind e of
             Breakpoint -> True
             _ -> False
+        liftIO . putStrLn $ "breakpoint stopped at location"
+        loc <- location ev
+        liftIO . putStrLn $ show loc
         spr <- enable $ createStepRequest (thread ev) StepLine StepOver
 
         pollEvents $ \e -> case eventKind e of

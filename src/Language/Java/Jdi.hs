@@ -75,6 +75,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as B8
 import Data.Binary.Get (runGet)
 import Data.Binary.Put (runPut)
+import Data.List (find)
 import GHC.IO.Handle (hWaitForInput)
 import qualified Data.Sequence as S
 
@@ -565,10 +566,40 @@ instance AllLineLocations Method where
 instance AllLineLocations J.ReferenceType where
     allLineLocations refType = concat <$> ((mapM allLineLocations) =<< (allMethods refType))
 
-location :: MonadIO m => Method -> VirtualMachine m Location
-location m@(Method ref method) = do
-    (J.LineTable _ _ lines) <- receiveLineTable m
-    return $ Location ref method (head lines)
+class Locatable a where
+    location :: MonadIO m => a -> VirtualMachine m Location
+
+instance Locatable Method where
+    location m@(Method ref method) = do
+        (J.LineTable _ _ lines) <- receiveLineTable m
+        return $ Location ref method (head lines)
+
+locationFromJavaLocation :: MonadIO m =>
+                            J.JavaLocation -> VirtualMachine m Location
+locationFromJavaLocation (J.JavaLocation typeTag refId methodId index) = do
+    h <- getVmHandle
+    cntr <- yieldPacketIdCounter
+    liftIO $ J.sendPacket h $ J.signatureCommand cntr refId
+    csr <- J.dat `liftM` (liftIO $ J.waitReply h)
+    let classSignature = runGet J.parseString (J.toLazy csr)
+    cntr' <- yieldPacketIdCounter
+    liftIO $ J.sendPacket h $ J.statusCommand cntr' refId
+    str <- J.dat `liftM` (liftIO $ J.waitReply h)
+    let status = runGet J.parseClassStatus (J.toLazy str)
+    let rt = J.ReferenceType typeTag refId classSignature status
+    methodList <- allMethods rt
+    let (Just method) = find isMyMethod methodList
+    al <- allLineLocations method
+    return $ last $ filter (lessThanIndex index) al
+    where
+        isMyMethod (Method _ (J.Method id _ _ _)) = id == methodId
+        lessThanIndex index (Location _ _ (J.Line codeIndex _))  = codeIndex <= index
+
+instance Locatable J.Event where
+    location (J.BreakpointEvent _ _ javaLocation) =
+        locationFromJavaLocation javaLocation
+    location (J.StepEvent _ _ javaLocation) =
+        locationFromJavaLocation javaLocation
 
 instance Resumable J.EventSet where
     resume (J.EventSet J.SuspendAll _) = resumeVm

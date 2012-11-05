@@ -699,13 +699,6 @@ topLevelThreadGroupsCommand packetId = CommandPacket 11 packetId 0 1 5 B.empty
 disposeCommand :: PacketId -> Packet
 disposeCommand packetId = CommandPacket 11 packetId 0 1 6 B.empty
 
-methodsCommand :: PacketId -> JavaReferenceTypeId -> Packet
-methodsCommand packetId typeId@(JavaReferenceTypeId size _) =
-    CommandPacket
-        (11 + size)
-        packetId 0 2 5
-        (toStrict $ runPut $ putReferenceTypeId typeId)
-
 threadReferenceNameCommand :: PacketId -> JavaThreadId -> Packet
 threadReferenceNameCommand packetId ti@(JavaObjectId size _) =
     CommandPacket
@@ -717,12 +710,26 @@ lineTableCommand :: PacketId -> JavaReferenceTypeId -> JavaMethodId -> Packet
 lineTableCommand
             packetId
             typeId@(JavaReferenceTypeId rSize _)
-            methodId@(JavaMethodId mSize _)
-    = CommandPacket
+            methodId@(JavaMethodId mSize _) =
+    CommandPacket
             (11 + rSize + mSize)
             packetId 0 6 1
             (toStrict $ runPut $ putReferenceTypeId typeId
                                  >> putMethodId methodId)
+
+signatureCommand :: PacketId -> JavaReferenceTypeId -> Packet
+signatureCommand packetId typeId@(JavaReferenceTypeId rSize _) =
+    CommandPacket
+        (11 + rSize)
+        packetId 0 2 1
+        (toStrict $ runPut $ putReferenceTypeId typeId)
+
+methodsCommand :: PacketId -> JavaReferenceTypeId -> Packet
+methodsCommand packetId typeId@(JavaReferenceTypeId size _) =
+    CommandPacket
+        (11 + size)
+        packetId 0 2 5
+        (toStrict $ runPut $ putReferenceTypeId typeId)
 
 sourceFileCommand :: PacketId -> JavaReferenceTypeId -> Packet
 sourceFileCommand
@@ -731,6 +738,13 @@ sourceFileCommand
     = CommandPacket
         (11 + rSize)
         packetId 0 2 7
+        (toStrict $ runPut $ putReferenceTypeId typeId)
+
+statusCommand :: PacketId -> JavaReferenceTypeId -> Packet
+statusCommand packetId typeId@(JavaReferenceTypeId rSize _) =
+    CommandPacket
+        (11 + rSize)
+        packetId 0 2 9
         (toStrict $ runPut $ putReferenceTypeId typeId)
 -- }}}
 ------------Jdwp communication functions
