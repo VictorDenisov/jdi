@@ -1,18 +1,12 @@
 module Language.Java.Jdi
 ( VirtualMachine
+, HostAddress
 , runVirtualMachine
 , vmName
 , description
 , version
-, removeEvent
-, resumeVm
-, EventRequest
-, enable
-, disable
-, addCountFilter
-, createClassPrepareRequest
-, createBreakpointRequest
-, createStepRequest
+, allClasses
+, allThreads
 , canAddMethod
 , canBeModified
 , canGetBytecodes
@@ -28,11 +22,18 @@ module Language.Java.Jdi
 , canUseInstanceFilters
 , canWatchFieldAccess
 , canWatchFieldModification
+, resumeVm
+, EventRequest
+, removeEvent
+, enable
+, disable
+, addCountFilter
+, createClassPrepareRequest
+, createBreakpointRequest
+, createStepRequest
 , J.ReferenceType
 , genericSignature
-, allClasses
 , J.ThreadReference
-, allThreads
 , classesByName
 , exit
 , J.ThreadGroupReference
@@ -189,8 +190,13 @@ setCapabilities c = do
     put $ s { capabilities = (Just c) }
 -- }}}
 
+type HostAddress = String
+
+{- | Executes source code which communicates with virtual machine.
+ Source code is executed for Vm running on host, port - HostAddress, PortID.
+ -}
 runVirtualMachine :: MonadIO m =>
-                            String -> PortID -> VirtualMachine m () -> m ()
+                            HostAddress -> PortID -> VirtualMachine m () -> m ()
 runVirtualMachine host port vm = do
     h <- liftIO $ connectTo host port
     liftIO $ hSetBinaryMode h True
@@ -269,14 +275,113 @@ receiveLineTable (Method (J.ReferenceType _ refId _ _)
 
 --- Functions from official interface
 -- {{{
+
+-- | Returns the name of the target VM as reported by the property java.vm.name.
 vmName :: MonadIO m => VirtualMachine m String
 vmName = J.vmName `liftM` runVersionCommand
 
+-- | Returns text information on the target VM
+-- and the debugger support that mirrors it.
 description :: MonadIO m => VirtualMachine m String
 description = J.description `liftM` runVersionCommand
 
+-- | The version of the virtual machine.
 version :: MonadIO m => VirtualMachine m String
 version = J.vmVersion `liftM` runVersionCommand
+
+-- | Returns all loaded classes.
+allClasses :: MonadIO m => VirtualMachine m [J.ReferenceType]
+allClasses = do
+    h <- getVmHandle
+    idsizes <- getIdSizes
+    cntr <- yieldPacketIdCounter
+    liftIO $ J.sendPacket h $ J.allClassesCommand cntr
+    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    let classes = runGet (J.parseAllClassesReply idsizes) (J.toLazy r)
+    return classes
+
+-- | Returns a list of the currently running threads.
+allThreads :: MonadIO m => VirtualMachine m [J.ThreadReference]
+allThreads = do
+    h <- getVmHandle
+    idsizes <- getIdSizes
+    cntr <- yieldPacketIdCounter
+    liftIO $ J.sendPacket h $ J.allThreadsCommand cntr
+    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    let threads = runGet (J.parseAllThreadsReply idsizes) (J.toLazy r)
+    return threads
+
+{- | Determines if the target VM supports the addition
+     of methods when performing class redefinition. -}
+canAddMethod :: MonadIO m => VirtualMachine m Bool
+canAddMethod = J.canAddMethod `liftM` getCapabilities
+
+-- | Determines if the target VM is a read-only VM.
+canBeModified :: MonadIO m => VirtualMachine m Bool
+canBeModified = undefined -- I'm not sure what should be here right now.
+                          -- Different JDI implementations put just constant
+                          -- values true or false. TODO
+
+-- | Determines if the target VM supports the retrieval of a method's bytecodes.
+canGetBytecodes :: MonadIO m => VirtualMachine m Bool
+canGetBytecodes = J.canGetBytecodes `liftM` getCapabilities
+
+{- | Determines if the target VM supports the retrieval of the monitor
+     for which a thread is currently waiting.-}
+canGetCurrentContendedMonitor :: MonadIO m => VirtualMachine m Bool
+canGetCurrentContendedMonitor =
+                J.canGetCurrentContendedMonitor `liftM` getCapabilities
+
+{- | Determines if the target VM supports the retrieval
+     of the monitor information for an object.-}
+canGetMonitorInfo :: MonadIO m => VirtualMachine m Bool
+canGetMonitorInfo = J.canGetMonitorInfo `liftM` getCapabilities
+
+{- | Determines if the target VM supports the retrieval
+     of the monitors owned by a thread.-}
+canGetOwnedMonitorInfo :: MonadIO m => VirtualMachine m Bool
+canGetOwnedMonitorInfo = J.canGetOwnedMonitorInfo `liftM` getCapabilities
+
+-- | Determines if the target VM supports getting the source debug extension.
+canGetSourceDebugExtension :: MonadIO m => VirtualMachine m Bool
+canGetSourceDebugExtension =
+                        J.canGetSourceDebugExtension `liftM` getCapabilities
+
+{- | Determines if the target VM supports the query of the synthetic attribute
+     of a method or field.-}
+canGetSynteticAttribute :: MonadIO m => VirtualMachine m Bool
+canGetSynteticAttribute = J.canGetSynteticAttribute `liftM` getCapabilities
+
+-- | Determines if the target VM supports popping frames of a threads stack.
+canPopFrames :: MonadIO m => VirtualMachine m Bool
+canPopFrames = J.canPopFrames `liftM` getCapabilities
+
+-- | Determines if the target VM supports any level of class redefinition.
+canRedefineClasses :: MonadIO m => VirtualMachine m Bool
+canRedefineClasses = J.canRedefineClasses `liftM` getCapabilities
+
+-- | Determines if the target VM supports the creation of VMDeathRequests.
+canRequestVmDeathEvent :: MonadIO m => VirtualMachine m Bool
+canRequestVmDeathEvent = J.canRequestVmDeathEvent `liftM` getCapabilities
+
+{- | Determines if the target VM supports unrestricted changes
+     when performing class redefinition.-}
+canUnrestrictedlyRedefineClasses :: MonadIO m => VirtualMachine m Bool
+canUnrestrictedlyRedefineClasses =
+                J.canUnrestrictedlyRedefineClasses `liftM` getCapabilities
+
+{- | Determines if the target VM supports filtering events
+     by specific instance object.-}
+canUseInstanceFilters :: MonadIO m => VirtualMachine m Bool
+canUseInstanceFilters = J.canUseInstanceFilters `liftM` getCapabilities
+
+-- | Determines if the target VM supports watchpoints for field access.
+canWatchFieldAccess :: MonadIO m => VirtualMachine m Bool
+canWatchFieldAccess = J.canWatchFieldAccess `liftM` getCapabilities
+
+-- | Determines if the target VM supports watchpoints for field modification.
+canWatchFieldModification :: MonadIO m => VirtualMachine m Bool
+canWatchFieldModification = J.canWatchFieldModification `liftM` getCapabilities
 
 removeEvent :: MonadIO m => VirtualMachine m J.EventSet
 removeEvent = do
@@ -374,53 +479,6 @@ createBreakpointRequest l = EventRequest J.SuspendAll Nothing [] (BreakpointRequ
 createStepRequest :: J.ThreadReference -> J.StepSize -> J.StepDepth -> EventRequest
 createStepRequest tr ss sd = EventRequest J.SuspendAll Nothing [] (StepRequest tr ss sd)
 
-canAddMethod :: MonadIO m => VirtualMachine m Bool
-canAddMethod = J.canAddMethod `liftM` getCapabilities
-
-canBeModified :: MonadIO m => VirtualMachine m Bool
-canBeModified = undefined -- I'm not sure what should be here right now.
-                          -- Different JDI implementations put just constant
-                          -- values true or false. TODO
-
-canGetBytecodes :: MonadIO m => VirtualMachine m Bool
-canGetBytecodes = J.canGetBytecodes `liftM` getCapabilities
-
-canGetCurrentContendedMonitor :: MonadIO m => VirtualMachine m Bool
-canGetCurrentContendedMonitor = J.canGetCurrentContendedMonitor `liftM` getCapabilities
-
-canGetMonitorInfo :: MonadIO m => VirtualMachine m Bool
-canGetMonitorInfo = J.canGetMonitorInfo `liftM` getCapabilities
-
-canGetOwnedMonitorInfo :: MonadIO m => VirtualMachine m Bool
-canGetOwnedMonitorInfo = J.canGetOwnedMonitorInfo `liftM` getCapabilities
-
-canGetSourceDebugExtension :: MonadIO m => VirtualMachine m Bool
-canGetSourceDebugExtension = J.canGetSourceDebugExtension `liftM` getCapabilities
-
-canGetSynteticAttribute :: MonadIO m => VirtualMachine m Bool
-canGetSynteticAttribute = J.canGetSynteticAttribute `liftM` getCapabilities
-
-canPopFrames :: MonadIO m => VirtualMachine m Bool
-canPopFrames = J.canPopFrames `liftM` getCapabilities
-
-canRedefineClasses :: MonadIO m => VirtualMachine m Bool
-canRedefineClasses = J.canRedefineClasses `liftM` getCapabilities
-
-canRequestVmDeathEvent :: MonadIO m => VirtualMachine m Bool
-canRequestVmDeathEvent = J.canRequestVmDeathEvent `liftM` getCapabilities
-
-canUnrestrictedlyRedefineClasses :: MonadIO m => VirtualMachine m Bool
-canUnrestrictedlyRedefineClasses = J.canUnrestrictedlyRedefineClasses `liftM` getCapabilities
-
-canUseInstanceFilters :: MonadIO m => VirtualMachine m Bool
-canUseInstanceFilters = J.canUseInstanceFilters `liftM` getCapabilities
-
-canWatchFieldAccess :: MonadIO m => VirtualMachine m Bool
-canWatchFieldAccess = J.canWatchFieldAccess `liftM` getCapabilities
-
-canWatchFieldModification :: MonadIO m => VirtualMachine m Bool
-canWatchFieldModification = J.canWatchFieldModification `liftM` getCapabilities
-
 genericSignature :: J.ReferenceType -> String
 genericSignature (J.ReferenceType _ _ gs _) = gs
 
@@ -442,16 +500,6 @@ signatureToName ('[' : v) = (signatureToName v) ++ "[]"
 instance Name J.ReferenceType where
     name = return . signatureToName . genericSignature
 
-allClasses :: MonadIO m => VirtualMachine m [J.ReferenceType]
-allClasses = do
-    h <- getVmHandle
-    idsizes <- getIdSizes
-    cntr <- yieldPacketIdCounter
-    liftIO $ J.sendPacket h $ J.allClassesCommand cntr
-    r <- J.dat `liftM` (liftIO $ J.waitReply h)
-    let classes = runGet (J.parseAllClassesReply idsizes) (J.toLazy r)
-    return classes
-
 instance Name J.ThreadReference where
     name (J.ThreadReference refId) = do
         h <- getVmHandle
@@ -471,16 +519,6 @@ resumeThreadId tId = do
 
 instance Resumable J.ThreadReference where
     resume (J.ThreadReference tId) = resumeThreadId tId
-
-allThreads :: MonadIO m => VirtualMachine m [J.ThreadReference]
-allThreads = do
-    h <- getVmHandle
-    idsizes <- getIdSizes
-    cntr <- yieldPacketIdCounter
-    liftIO $ J.sendPacket h $ J.allThreadsCommand cntr
-    r <- J.dat `liftM` (liftIO $ J.waitReply h)
-    let threads = runGet (J.parseAllThreadsReply idsizes) (J.toLazy r)
-    return threads
 
 classesByName :: MonadIO m => String -> VirtualMachine m [J.ReferenceType]
 classesByName name = do
