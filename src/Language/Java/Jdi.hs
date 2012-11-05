@@ -8,6 +8,8 @@ module Language.Java.Jdi
 , resumeVm
 , EventRequest
 , enable
+, disable
+, addCountFilter
 , createClassPrepareRequest
 , createBreakpointRequest
 , createStepRequest
@@ -358,6 +360,10 @@ disable (EventRequest
     liftIO $ J.sendPacket h packet
     r <- J.dat `liftM` (liftIO $ J.waitReply h)
     return $ EventRequest suspendPolicy Nothing modifiers er
+
+addCountFilter :: Int -> EventRequest -> EventRequest
+addCountFilter count (EventRequest sp ri ems er) =
+            EventRequest sp ri ((J.Count (fromIntegral count)) : ems) er
 
 createClassPrepareRequest :: EventRequest
 createClassPrepareRequest = EventRequest J.SuspendAll Nothing [] ClassPrepareRequest

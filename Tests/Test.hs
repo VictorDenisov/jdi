@@ -56,7 +56,7 @@ main = do
         liftIO . putStrLn $ "breakpoint stopped at location"
         loc <- location ev
         liftIO . putStrLn $ show loc
-        spr <- enable $ createStepRequest (thread ev) StepLine StepOver
+        spr <- enable $ (createStepRequest (thread ev) StepLine StepOver)
 
         pollEvents $ \e -> case eventKind e of
             VmDeath -> True
