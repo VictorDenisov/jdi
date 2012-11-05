@@ -296,66 +296,77 @@ resumeVm = do
     r <- liftIO $ J.waitReply h
     return ()
 
-                                 -- Id of event request if it's enabled
-data EventRequest = EventRequest J.SuspendPolicy (Maybe J.JavaInt) EventRequest
+                                 
+data EventRequest = EventRequest
+                        J.SuspendPolicy
+                        (Maybe J.JavaInt) -- Id of event request if it's enabled
+                        [J.EventModifier]
+                        EventRequest
                   | ClassPrepareRequest
                   | BreakpointRequest Location
                   | StepRequest J.ThreadReference J.StepSize J.StepDepth
                     deriving (Show, Eq)
 
 enable :: MonadIO m => EventRequest -> VirtualMachine m EventRequest
-enable (EventRequest suspendPolicy Nothing ClassPrepareRequest) = do
+enable (EventRequest suspendPolicy Nothing modifiers ClassPrepareRequest) = do
     h <- getVmHandle
     cntr <- yieldPacketIdCounter
-    liftIO $ J.sendPacket h $ J.eventSetRequest cntr J.ClassPrepare suspendPolicy []
+    let packet = J.eventSetRequest cntr J.ClassPrepare suspendPolicy modifiers
+    liftIO $ J.sendPacket h packet
     r <- J.dat `liftM` (liftIO $ J.waitReply h)
     let requestId = runGet J.parseInt (J.toLazy r)
-    return $ EventRequest suspendPolicy (Just requestId) ClassPrepareRequest
-enable (EventRequest suspendPolicy Nothing request@(BreakpointRequest
+    return $ EventRequest suspendPolicy (Just requestId) modifiers ClassPrepareRequest
+enable (EventRequest suspendPolicy Nothing modifiers request@(BreakpointRequest
                 (Location (J.ReferenceType typeTag refId _ _)
                           (J.Method mId _ _ _)
                           (J.Line codeIndex lineNum)))) = do
     h <- getVmHandle
     cntr <- yieldPacketIdCounter
-    let modifiers = [J.LocationOnly (J.JavaLocation typeTag refId mId codeIndex)]
-    let packet = J.eventSetRequest cntr J.Breakpoint suspendPolicy modifiers
+    let modifiers' = (J.LocationOnly
+                         (J.JavaLocation typeTag refId mId codeIndex)
+                     ) : modifiers
+    let packet = J.eventSetRequest cntr J.Breakpoint suspendPolicy modifiers'
     liftIO $ J.sendPacket h packet
     r <- J.dat `liftM` (liftIO $ J.waitReply h)
     let requestId = runGet J.parseInt (J.toLazy r)
-    return $ EventRequest suspendPolicy (Just requestId) request
-enable (EventRequest suspendPolicy Nothing request@(StepRequest
+    return $ EventRequest suspendPolicy (Just requestId) modifiers request
+enable (EventRequest suspendPolicy Nothing modifiers request@(StepRequest
                 (J.ThreadReference tId) ss sd)) = do
     h <- getVmHandle
     cntr <- yieldPacketIdCounter
-    let modifiers = [J.Step tId ss sd]
-    let packet = J.eventSetRequest cntr J.SingleStep suspendPolicy modifiers
+    let modifiers' = (J.Step tId ss sd) : modifiers
+    let packet = J.eventSetRequest cntr J.SingleStep suspendPolicy modifiers'
     liftIO $ J.sendPacket h packet
     r <- J.dat `liftM` (liftIO $ J.waitReply h)
     let requestId = runGet J.parseInt (J.toLazy r)
-    return $ EventRequest suspendPolicy (Just requestId) request
-enable request@(EventRequest suspendPolicy (Just _) _) = return request
+    return $ EventRequest suspendPolicy (Just requestId) modifiers request
+enable request@(EventRequest suspendPolicy (Just _) _ _) = return request
 
 isEnabled :: EventRequest -> Bool
-isEnabled (EventRequest _ (Just _) _) = True
-isEnabled (EventRequest _ Nothing _)  = False
+isEnabled (EventRequest _ (Just _) _ _) = True
+isEnabled (EventRequest _ Nothing _ _)  = False
 
 disable :: MonadIO m => EventRequest -> VirtualMachine m EventRequest
-disable (EventRequest suspendPolicy (Just requestId) er@(ClassPrepareRequest{})) = do
+disable (EventRequest
+                suspendPolicy
+                (Just requestId)
+                modifiers
+                er@(ClassPrepareRequest{})) = do
     h <- getVmHandle
     cntr <- yieldPacketIdCounter
     let packet = J.eventClearRequest cntr J.ClassPrepare requestId
     liftIO $ J.sendPacket h packet
     r <- J.dat `liftM` (liftIO $ J.waitReply h)
-    return $ EventRequest suspendPolicy Nothing er
+    return $ EventRequest suspendPolicy Nothing modifiers er
 
 createClassPrepareRequest :: EventRequest
-createClassPrepareRequest = EventRequest J.SuspendAll Nothing ClassPrepareRequest
+createClassPrepareRequest = EventRequest J.SuspendAll Nothing [] ClassPrepareRequest
 
 createBreakpointRequest :: Location -> EventRequest
-createBreakpointRequest l = EventRequest J.SuspendAll Nothing (BreakpointRequest l)
+createBreakpointRequest l = EventRequest J.SuspendAll Nothing [] (BreakpointRequest l)
 
 createStepRequest :: J.ThreadReference -> J.StepSize -> J.StepDepth -> EventRequest
-createStepRequest tr ss sd = EventRequest J.SuspendAll Nothing (StepRequest tr ss sd)
+createStepRequest tr ss sd = EventRequest J.SuspendAll Nothing [] (StepRequest tr ss sd)
 
 canAddMethod :: MonadIO m => VirtualMachine m Bool
 canAddMethod = J.canAddMethod `liftM` getCapabilities
