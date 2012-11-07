@@ -22,7 +22,11 @@ module Language.Java.Jdi
 , canUseInstanceFilters
 , canWatchFieldAccess
 , canWatchFieldModification
+, classesByName
+, dispose
+, exit
 , resumeVm
+, topLevelThreadGroups
 , EventRequest
 , removeEvent
 , enable
@@ -34,13 +38,9 @@ module Language.Java.Jdi
 , J.ReferenceType
 , genericSignature
 , J.ThreadReference
-, classesByName
-, exit
 , J.ThreadGroupReference
 , J.StepSize(..)
 , J.StepDepth(..)
-, topLevelThreadGroups
-, dispose
 , Method
 , Name(..)
 , Resumable(..)
@@ -370,6 +370,37 @@ canUnrestrictedlyRedefineClasses :: MonadIO m => VirtualMachine m Bool
 canUnrestrictedlyRedefineClasses =
                 J.canUnrestrictedlyRedefineClasses `liftM` getCapabilities
 
+
+{- | Returns the loaded reference types that match a given name. The name must
+ be fully qualified (for example, java.lang.String). The returned list will
+ contain a ReferenceType for each class or interface found with the given name.
+ The search is confined to loaded classes only; no attempt is made to load a
+ class of the given name.
+
+ The returned list will include reference types loaded at least to the point
+ of preparation and types (like array) for which preparation is not defined.
+-}
+classesByName :: MonadIO m =>
+       String -- ^ className - the class/interface name to search for
+    -> VirtualMachine m [J.ReferenceType] {- ^ a list of ReferenceType objects,
+                                          each mirroring a type in the target
+                                          VM with the given name. -}
+classesByName name = do
+    let jniName = "L" ++ (map replaceDot name) ++ ";"
+    h <- getVmHandle
+    idsizes <- getIdSizes
+    cntr <- yieldPacketIdCounter
+    liftIO $ J.sendPacket h $ J.classesBySignatureCommand cntr jniName
+    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    let classes = runGet (J.parseClassesBySignatureReply idsizes) (J.toLazy r)
+    return $ map (setSignature jniName) classes
+
+    where
+        replaceDot '.' = '/'
+        replaceDot x = x
+        setSignature newSig (J.ReferenceType tt ri _ cs) =
+            J.ReferenceType tt ri newSig cs
+
 {- | Determines if the target VM supports filtering events
      by specific instance object.-}
 canUseInstanceFilters :: MonadIO m => VirtualMachine m Bool
@@ -383,6 +414,45 @@ canWatchFieldAccess = J.canWatchFieldAccess `liftM` getCapabilities
 canWatchFieldModification :: MonadIO m => VirtualMachine m Bool
 canWatchFieldModification = J.canWatchFieldModification `liftM` getCapabilities
 
+-- | Invalidates this virtual machine mirror.
+dispose :: MonadIO m => VirtualMachine m ()
+dispose = do
+    h <- getVmHandle
+    cntr <- yieldPacketIdCounter
+    liftIO $ J.sendPacket h $ J.disposeCommand cntr
+    liftIO $ J.waitReply h
+    return ()
+
+-- | Causes the mirrored VM to terminate with the given error code.
+exit :: MonadIO m => Int -> VirtualMachine m ()
+exit exitCode = do
+    h <- getVmHandle
+    cntr <- yieldPacketIdCounter
+    liftIO $ J.sendPacket h $ J.exitCommand cntr (fromIntegral exitCode)
+    liftIO $ J.waitReply h
+    return ()
+
+-- | Continues the execution of the application running in this virtual machine.
+resumeVm :: MonadIO m => VirtualMachine m ()
+resumeVm = do
+    h <- getVmHandle
+    cntr <- yieldPacketIdCounter
+    idsizes <- getIdSizes
+    liftIO $ J.sendPacket h $ J.resumeVmCommand cntr
+    r <- liftIO $ J.waitReply h
+    return ()
+
+-- | Returns each thread group which does not have a parent.
+topLevelThreadGroups :: MonadIO m => VirtualMachine m [J.ThreadGroupReference]
+topLevelThreadGroups = do
+    h <- getVmHandle
+    cntr <- yieldPacketIdCounter
+    idsizes <- getIdSizes
+    liftIO $ J.sendPacket h $ J.topLevelThreadGroupsCommand cntr
+    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    let groups = runGet (J.parseThreadGroupsReply idsizes) (J.toLazy r)
+    return groups
+
 removeEvent :: MonadIO m => VirtualMachine m J.EventSet
 removeEvent = do
     h <- getVmHandle
@@ -394,16 +464,6 @@ removeEvent = do
             return $ runGet (J.parseEventSet idsizes) (J.toLazy eventSetData)
         else takeFromQueue
 
-resumeVm :: MonadIO m => VirtualMachine m ()
-resumeVm = do
-    h <- getVmHandle
-    cntr <- yieldPacketIdCounter
-    idsizes <- getIdSizes
-    liftIO $ J.sendPacket h $ J.resumeVmCommand cntr
-    r <- liftIO $ J.waitReply h
-    return ()
-
-                                 
 data EventRequest = EventRequest
                         J.SuspendPolicy
                         (Maybe J.JavaInt) -- Id of event request if it's enabled
@@ -519,49 +579,6 @@ resumeThreadId tId = do
 
 instance Resumable J.ThreadReference where
     resume (J.ThreadReference tId) = resumeThreadId tId
-
-classesByName :: MonadIO m => String -> VirtualMachine m [J.ReferenceType]
-classesByName name = do
-    let jniName = "L" ++ (map replaceDot name) ++ ";"
-    h <- getVmHandle
-    idsizes <- getIdSizes
-    cntr <- yieldPacketIdCounter
-    liftIO $ J.sendPacket h $ J.classesBySignatureCommand cntr jniName
-    r <- J.dat `liftM` (liftIO $ J.waitReply h)
-    let classes = runGet (J.parseClassesBySignatureReply idsizes) (J.toLazy r)
-    return $ map (setSignature jniName) classes
-    
-    where
-        replaceDot '.' = '/'
-        replaceDot x = x
-        setSignature newSig (J.ReferenceType tt ri _ cs) =
-            J.ReferenceType tt ri newSig cs
-
-exit :: MonadIO m => Int -> VirtualMachine m ()
-exit exitCode = do
-    h <- getVmHandle
-    cntr <- yieldPacketIdCounter
-    liftIO $ J.sendPacket h $ J.exitCommand cntr (fromIntegral exitCode)
-    liftIO $ J.waitReply h
-    return ()
-
-topLevelThreadGroups :: MonadIO m => VirtualMachine m [J.ThreadGroupReference]
-topLevelThreadGroups = do
-    h <- getVmHandle
-    cntr <- yieldPacketIdCounter
-    idsizes <- getIdSizes
-    liftIO $ J.sendPacket h $ J.topLevelThreadGroupsCommand cntr
-    r <- J.dat `liftM` (liftIO $ J.waitReply h)
-    let groups = runGet (J.parseThreadGroupsReply idsizes) (J.toLazy r)
-    return groups
-
-dispose :: MonadIO m => VirtualMachine m ()
-dispose = do
-    h <- getVmHandle
-    cntr <- yieldPacketIdCounter
-    liftIO $ J.sendPacket h $ J.disposeCommand cntr
-    liftIO $ J.waitReply h
-    return ()
 
 data Method = Method J.ReferenceType J.Method
               deriving (Eq, Show)
