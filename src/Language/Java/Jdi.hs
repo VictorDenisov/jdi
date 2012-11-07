@@ -1,6 +1,5 @@
 module Language.Java.Jdi
 ( VirtualMachine
-, HostAddress
 , runVirtualMachine
 , vmName
 , description
@@ -27,8 +26,14 @@ module Language.Java.Jdi
 , exit
 , resumeVm
 , topLevelThreadGroups
-, EventRequest
+, J.Event
+, J.EventKind(..)
+, J.eventKind
+, referenceType
+, thread
+, J.EventSet(..)
 , removeEvent
+, EventRequest
 , enable
 , disable
 , addCountFilter
@@ -42,24 +47,18 @@ module Language.Java.Jdi
 , J.StepSize(..)
 , J.StepDepth(..)
 , Method
-, Name(..)
-, Resumable(..)
 , allMethods
 , Location
 , codeIndex
 , declaringType
 , lineNumber
 , method
-, sourceName
-, allLineLocations
-, location
-, referenceType
-, thread
-, J.EventSet(..)
-, J.Event
-, J.eventKind
 , J.SuspendPolicy(..)
-, J.EventKind(..)
+, Resumable(..)
+, Name(..)
+, Locatable(..)
+, SourceName(..)
+, AllLineLocations(..)
 ) where
 
 import Control.Monad.State (StateT(..), MonadState(..), evalStateT)
@@ -190,13 +189,14 @@ setCapabilities c = do
     put $ s { capabilities = (Just c) }
 -- }}}
 
-type HostAddress = String
-
 {- | Executes source code which communicates with virtual machine.
- Source code is executed for Vm running on host, port - HostAddress, PortID.
+ Source code is executed for Vm running on the defined host and port.
  -}
 runVirtualMachine :: MonadIO m =>
-                            HostAddress -> PortID -> VirtualMachine m () -> m ()
+       String -- ^ Host address.
+    -> PortID -- ^ Port.
+    -> VirtualMachine m () -- ^ Monad to run.
+    -> m () -- ^ Internal monad.
 runVirtualMachine host port vm = do
     h <- liftIO $ connectTo host port
     liftIO $ hSetBinaryMode h True
@@ -249,11 +249,25 @@ releaseResources = do
 initialConfiguration :: Handle -> Configuration
 initialConfiguration h = Configuration Nothing 0 h S.empty Nothing Nothing
 
+-- Classes definitions.
+-- {{{
+
 class Name a where
     name :: MonadIO m => a -> VirtualMachine m String
 
 class Resumable a where
     resume :: MonadIO m => a -> VirtualMachine m ()
+
+class Locatable a where
+    location :: MonadIO m => a -> VirtualMachine m Location
+
+class SourceName a where
+    sourceName :: MonadIO m => a -> VirtualMachine m String
+
+class AllLineLocations a where
+    allLineLocations :: MonadIO m => a -> VirtualMachine m [Location]
+
+-- }}}
 
 --- Auxiliary functions
 runVersionCommand :: MonadIO m => VirtualMachine m J.Version
@@ -289,7 +303,13 @@ description = J.description `liftM` runVersionCommand
 version :: MonadIO m => VirtualMachine m String
 version = J.vmVersion `liftM` runVersionCommand
 
--- | Returns all loaded classes.
+{- | Returns all loaded types. For each loaded type in the target VM a
+ ReferenceType will be placed in the returned list. The list will include
+ ReferenceTypes which mirror classes, interfaces, and array types.
+
+ The returned list will include reference types loaded at least to the point
+ of preparation and types (like array) for which preparation is not defined.
+ -}
 allClasses :: MonadIO m => VirtualMachine m [J.ReferenceType]
 allClasses = do
     h <- getVmHandle
@@ -464,6 +484,35 @@ removeEvent = do
             return $ runGet (J.parseEventSet idsizes) (J.toLazy eventSetData)
         else takeFromQueue
 
+instance Locatable J.Event where
+    location (J.BreakpointEvent _ _ javaLocation) =
+        locationFromJavaLocation javaLocation
+    location (J.StepEvent _ _ javaLocation) =
+        locationFromJavaLocation javaLocation
+
+referenceType :: J.Event -> J.ReferenceType
+referenceType (J.ClassPrepareEvent
+                    _
+                    threadId
+                    typeTag
+                    typeId
+                    signature
+                    classStatus) = J.ReferenceType
+                                            typeTag
+                                            typeId
+                                            signature
+                                            classStatus
+
+thread :: J.Event -> J.ThreadReference
+thread (J.ClassPrepareEvent
+            _
+            threadId
+            _ _ _ _) = J.ThreadReference threadId
+thread (J.BreakpointEvent
+            _
+            threadId
+            _) = J.ThreadReference threadId
+
 data EventRequest = EventRequest
                         J.SuspendPolicy
                         (Maybe J.JavaInt) -- Id of event request if it's enabled
@@ -611,9 +660,6 @@ lineNumber (Location _ _ (J.Line _ ln)) = fromIntegral ln
 method :: Location -> Method
 method (Location refType method _) = Method refType method
 
-class SourceName a where
-    sourceName :: MonadIO m => a -> VirtualMachine m String
-
 instance SourceName Location where
     sourceName (Location ref _ _) = sourceName ref
 
@@ -627,9 +673,6 @@ instance SourceName J.ReferenceType where
         let sourceName = runGet J.parseString (J.toLazy r)
         return sourceName
 
-class AllLineLocations a where
-    allLineLocations :: MonadIO m => a -> VirtualMachine m [Location]
-
 instance AllLineLocations Method where
     allLineLocations m@(Method ref method) = do
         (J.LineTable _ _ lines) <- receiveLineTable m
@@ -637,9 +680,6 @@ instance AllLineLocations Method where
 
 instance AllLineLocations J.ReferenceType where
     allLineLocations refType = concat <$> ((mapM allLineLocations) =<< (allMethods refType))
-
-class Locatable a where
-    location :: MonadIO m => a -> VirtualMachine m Location
 
 instance Locatable Method where
     location m@(Method ref method) = do
@@ -667,12 +707,6 @@ locationFromJavaLocation (J.JavaLocation typeTag refId methodId index) = do
         isMyMethod (Method _ (J.Method id _ _ _)) = id == methodId
         lessThanIndex index (Location _ _ (J.Line codeIndex _))  = codeIndex <= index
 
-instance Locatable J.Event where
-    location (J.BreakpointEvent _ _ javaLocation) =
-        locationFromJavaLocation javaLocation
-    location (J.StepEvent _ _ javaLocation) =
-        locationFromJavaLocation javaLocation
-
 instance Resumable J.EventSet where
     resume (J.EventSet J.SuspendAll _) = resumeVm
     resume (J.EventSet J.SuspendEventThread events)
@@ -681,27 +715,5 @@ instance Resumable J.EventSet where
                                        $ head events
     resume (J.EventSet J.SuspendNone _) = return ()
 
-referenceType :: J.Event -> J.ReferenceType
-referenceType (J.ClassPrepareEvent
-                    _
-                    threadId
-                    typeTag
-                    typeId
-                    signature
-                    classStatus) = J.ReferenceType
-                                            typeTag
-                                            typeId
-                                            signature
-                                            classStatus
-
-thread :: J.Event -> J.ThreadReference
-thread (J.ClassPrepareEvent
-            _
-            threadId
-            _ _ _ _) = J.ThreadReference threadId
-thread (J.BreakpointEvent
-            _
-            threadId
-            _) = J.ThreadReference threadId
 -- }}}
 -- vim: foldmethod=marker foldmarker={{{,}}}
