@@ -226,6 +226,62 @@ threadIdSize is = objectIdSize is
 threadGroupIdSize :: IdSizes -> JavaInt
 threadGroupIdSize is = objectIdSize is
 
+{- | Several Event objects may be created at a given time by the target VirtualMachine. For example, there may be more than one BreakpointRequest for a given Location or you might single step to the same location as a BreakpointRequest. These Event objects are delivered together as an EventSet. For uniformity, an EventSet is always used to deliver Event objects. EventSets are delivered by the EventQueue. EventSets are unmodifiable.
+
+Associated with the issuance of an event set, suspensions may have occurred in the target VM. These suspensions correspond with the suspend policy. To assure matching resumes occur, it is recommended, where possible, to complete the processing of an event set with EventSet.resume().
+
+The events that are grouped in an EventSet are restricted in the following ways:
+
+Always singleton sets:
+
+    - VMStartEvent
+
+    - VMDisconnectEvent
+
+Only with other VMDeathEvents:
+
+    - VMDeathEvent
+
+Only with other ThreadStartEvents for the same thread:
+
+    - ThreadStartEvent
+
+Only with other ThreadDeathEvents for the same thread:
+
+    - ThreadDeathEvent
+
+Only with other ClassPrepareEvents for the same class:
+
+    - ClassPrepareEvent
+
+Only with other ClassUnloadEvents for the same class:
+
+    - ClassUnloadEvent
+
+Only with other AccessWatchpointEvents for the same field access:
+
+    - AccessWatchpointEvent
+
+Only with other ModificationWatchpointEvents for the same field modification:
+
+    - ModificationWatchpointEvent
+
+Only with other ExceptionEvents for the same exception occurrance:
+
+    - ExceptionEvent
+
+Only with other MethodExitEvents for the same method exit:
+
+    - MethodExitEvent
+
+Only with other members of this group, at the same location and in the same thread:
+
+    - BreakpointEvent
+
+    - StepEvent
+
+    - MethodEntryEvent
+-}
 data EventSet = EventSet
               { suspendPolicy :: SuspendPolicy
                 -- | In essence this function is eventIterator from JDI.
