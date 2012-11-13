@@ -43,6 +43,7 @@ module Language.Java.Jdi
 , J.ReferenceType
 , genericSignature
 , allMethods
+, J.StackFrame
 , J.ThreadReference
 , J.ThreadGroupReference
 , J.StepSize(..)
@@ -619,6 +620,16 @@ instance Name J.ThreadReference where
 
 instance Resumable J.ThreadReference where
     resume (J.ThreadReference tId) = resumeThreadId tId
+
+frames :: MonadIO m => J.ThreadReference -> Int -> Int -> VirtualMachine m [J.StackFrame]
+frames tr@(J.ThreadReference ti) start len = do
+    h <- getVmHandle
+    idsizes <- getIdSizes
+    cntr <- yieldPacketIdCounter
+    let packet = J.framesCommand cntr ti 0 (-1)
+    liftIO $ J.sendPacket h packet
+    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    return $ runGet (J.parseStackFrameList idsizes) (J.toLazy r)
 
 data Method = Method J.ReferenceType J.Method
               deriving (Eq, Show)

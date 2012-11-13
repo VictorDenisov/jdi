@@ -402,6 +402,8 @@ data StepDepth = StepInto
                | StepOver
                  deriving (Eq, Show)
 
+data StackFrame = StackFrame JavaFrameId JavaLocation
+
 data Capabilities = Capabilities
     { canWatchFieldModification        :: JavaBoolean
     , canWatchFieldAccess              :: JavaBoolean
@@ -675,6 +677,17 @@ putClearEvent ek requestId = do
     putEventKind ek
     put requestId
 
+parseStackFrame :: IdSizes -> Get StackFrame
+parseStackFrame idsizes = do
+    StackFrame
+        <$> parseFrameId (frameIdSize idsizes)
+        <*> parseLocation idsizes
+
+parseStackFrameList :: IdSizes -> Get [StackFrame]
+parseStackFrameList idsizes = do
+    frameCount <- parseInt
+    mapM (\_ -> parseStackFrame idsizes) [1..frameCount]
+
 toStrict :: LB.ByteString -> B.ByteString
 toStrict = B.concat . LB.toChunks
 
@@ -755,13 +768,6 @@ topLevelThreadGroupsCommand packetId = CommandPacket 11 packetId 0 1 5 B.empty
 disposeCommand :: PacketId -> Packet
 disposeCommand packetId = CommandPacket 11 packetId 0 1 6 B.empty
 
-threadReferenceNameCommand :: PacketId -> JavaThreadId -> Packet
-threadReferenceNameCommand packetId ti@(JavaObjectId size _) =
-    CommandPacket
-        (11 + size)
-        packetId 0 11 1
-        (toStrict $ runPut $ putThreadId ti)
-
 lineTableCommand :: PacketId -> JavaReferenceTypeId -> JavaMethodId -> Packet
 lineTableCommand
             packetId
@@ -802,6 +808,22 @@ statusCommand packetId typeId@(JavaReferenceTypeId rSize _) =
         (11 + rSize)
         packetId 0 2 9
         (toStrict $ runPut $ putReferenceTypeId typeId)
+
+threadReferenceNameCommand :: PacketId -> JavaThreadId -> Packet
+threadReferenceNameCommand packetId ti@(JavaObjectId size _) =
+    CommandPacket
+        (11 + size)
+        packetId 0 11 1
+        (toStrict $ runPut $ putThreadId ti)
+
+framesCommand :: PacketId -> JavaThreadId -> JavaInt -> JavaInt -> Packet
+framesCommand packetId threadId@(JavaObjectId s _) startFrame len = do
+    CommandPacket
+        (11 + s + 4 + 4)
+        packetId 0 11 6
+        (toStrict $ runPut $ (putThreadId threadId
+                           >> putInt startFrame
+                           >> putInt len))
 -- }}}
 ------------Jdwp communication functions
 -- {{{
