@@ -67,7 +67,7 @@ module Language.Java.Jdi
 
 import Control.Monad.State (StateT(..), MonadState(..), evalStateT)
 import Control.Monad.Error (ErrorT, runErrorT, MonadError(..), Error(..))
-import Control.Monad (guard, when, mapM)
+import Control.Monad (guard, when, mapM, void)
 import qualified Language.Java.Jdwp as J
 import Network (connectTo, PortID)
 import qualified Data.Map as M
@@ -411,11 +411,9 @@ classesByName :: MonadIO m =>
                                           VM with the given name. -}
 classesByName name = do
     let jniName = "L" ++ (map replaceDot name) ++ ";"
-    h <- getVmHandle
     idsizes <- getIdSizes
-    cntr <- yieldPacketIdCounter
-    liftIO $ J.sendPacket h $ J.classesBySignatureCommand cntr jniName
-    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    reply <- runCommand $ J.classesBySignatureCommand jniName
+    let r = J.dat reply
     let classes = runGet (J.parseClassesBySignatureReply idsizes) (J.toLazy r)
     return $ map (setSignature jniName) classes
 
@@ -551,35 +549,26 @@ data EventRequest = EventRequest
 
 enable :: MonadIO m => EventRequest -> VirtualMachine m EventRequest
 enable (EventRequest suspendPolicy Nothing modifiers ClassPrepareRequest) = do
-    h <- getVmHandle
-    cntr <- yieldPacketIdCounter
-    let packet = J.eventSetRequest cntr J.ClassPrepare suspendPolicy modifiers
-    liftIO $ J.sendPacket h packet
-    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    reply <- runCommand $ J.eventSetRequest J.ClassPrepare suspendPolicy modifiers
+    let r = J.dat reply
     let requestId = runGet J.parseInt (J.toLazy r)
     return $ EventRequest suspendPolicy (Just requestId) modifiers ClassPrepareRequest
 enable (EventRequest suspendPolicy Nothing modifiers request@(BreakpointRequest
                 (Location (J.ReferenceType typeTag refId _ _)
                           (J.Method mId _ _ _)
                           (J.Line codeIndex lineNum)))) = do
-    h <- getVmHandle
-    cntr <- yieldPacketIdCounter
     let modifiers' = (J.LocationOnly
                          (J.JavaLocation typeTag refId mId codeIndex)
                      ) : modifiers
-    let packet = J.eventSetRequest cntr J.Breakpoint suspendPolicy modifiers'
-    liftIO $ J.sendPacket h packet
-    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    reply <- runCommand $ J.eventSetRequest J.Breakpoint suspendPolicy modifiers'
+    let r = J.dat reply
     let requestId = runGet J.parseInt (J.toLazy r)
     return $ EventRequest suspendPolicy (Just requestId) modifiers request
 enable (EventRequest suspendPolicy Nothing modifiers request@(StepRequest
                 (J.ThreadReference tId) ss sd)) = do
-    h <- getVmHandle
-    cntr <- yieldPacketIdCounter
     let modifiers' = (J.Step tId ss sd) : modifiers
-    let packet = J.eventSetRequest cntr J.SingleStep suspendPolicy modifiers'
-    liftIO $ J.sendPacket h packet
-    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    reply <- runCommand $ J.eventSetRequest J.SingleStep suspendPolicy modifiers'
+    let r = J.dat reply
     let requestId = runGet J.parseInt (J.toLazy r)
     return $ EventRequest suspendPolicy (Just requestId) modifiers request
 enable request@(EventRequest suspendPolicy (Just _) _ _) = return request
@@ -594,11 +583,7 @@ disable (EventRequest
                 (Just requestId)
                 modifiers
                 er@(ClassPrepareRequest{})) = do
-    h <- getVmHandle
-    cntr <- yieldPacketIdCounter
-    let packet = J.eventClearRequest cntr J.ClassPrepare requestId
-    liftIO $ J.sendPacket h packet
-    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    void $ runCommand $ J.eventClearRequest J.ClassPrepare requestId
     return $ EventRequest suspendPolicy Nothing modifiers er
 
 addCountFilter :: Int -> EventRequest -> EventRequest
@@ -619,11 +604,9 @@ genericSignature (J.ReferenceType _ _ gs _) = gs
 
 allMethods :: MonadIO m => J.ReferenceType -> VirtualMachine m [Method]
 allMethods rt@(J.ReferenceType _ refId _ _) = do
-    h <- getVmHandle
-    cntr <- yieldPacketIdCounter
     idsizes <- getIdSizes
-    liftIO $ J.sendPacket h $ J.methodsCommand cntr refId
-    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    reply <- runCommand $ J.methodsCommand refId
+    let r = J.dat reply
     let methods = runGet (J.parseMethodsReply idsizes) (J.toLazy r)
     return $ map (Method rt) methods
 
@@ -632,10 +615,8 @@ instance Name J.ReferenceType where
 
 instance Name J.ThreadReference where
     name (J.ThreadReference refId) = do
-        h <- getVmHandle
-        cntr <- yieldPacketIdCounter
-        liftIO $ J.sendPacket h $ J.threadReferenceNameCommand cntr refId
-        r <- J.dat `liftM` (liftIO $ J.waitReply h)
+        reply <- runCommand $ J.threadReferenceNameCommand refId
+        let r = J.dat reply
         let name = runGet J.parseString (J.toLazy r)
         return name
 
@@ -644,12 +625,9 @@ instance Resumable J.ThreadReference where
 
 frames :: MonadIO m => J.ThreadReference -> Int -> Int -> VirtualMachine m [J.StackFrame]
 frames tr@(J.ThreadReference ti) start len = do
-    h <- getVmHandle
     idsizes <- getIdSizes
-    cntr <- yieldPacketIdCounter
-    let packet = J.framesCommand cntr ti 0 (-1)
-    liftIO $ J.sendPacket h packet
-    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    reply <- runCommand $ J.framesCommand ti 0 (-1)
+    let r = J.dat reply
     return $ runGet (J.parseStackFrameList idsizes) (J.toLazy r)
 
 data Method = Method J.ReferenceType J.Method
@@ -697,11 +675,8 @@ instance SourceName Location where
 
 instance SourceName J.ReferenceType where
     sourceName (J.ReferenceType _ refId _ _) = do
-        h <- getVmHandle
-        cntr <- yieldPacketIdCounter
-        idsizes <- getIdSizes
-        liftIO $ J.sendPacket h $ J.sourceFileCommand cntr refId
-        r <- J.dat `liftM` (liftIO $ J.waitReply h)
+        reply <- runCommand $ J.sourceFileCommand refId
+        let r = J.dat reply
         let sourceName = runGet J.parseString (J.toLazy r)
         return sourceName
 
@@ -722,31 +697,22 @@ runVersionCommand = do
 receiveLineTable :: MonadIO m => Method -> VirtualMachine m J.LineTable
 receiveLineTable (Method (J.ReferenceType _ refId _ _)
                          (J.Method mId _ _ _)) = do
-    h <- getVmHandle
-    cntr <- yieldPacketIdCounter
-    liftIO $ J.sendPacket h $ J.lineTableCommand cntr refId mId
-    r <- J.dat `liftM` (liftIO $ J.waitReply h)
+    reply <- runCommand $ J.lineTableCommand refId mId
+    let r = J.dat reply
     return $ runGet J.parseLineTableReply (J.toLazy r)
 
 resumeThreadId :: MonadIO m => J.JavaThreadId -> VirtualMachine m ()
 resumeThreadId tId = do
-    h <- getVmHandle
-    cntr <- yieldPacketIdCounter
-    liftIO $ J.sendPacket h $ J.resumeThreadCommand cntr tId
-    r <- liftIO $ J.waitReply h
-    return ()
+    void $ runCommand $ J.resumeThreadCommand tId
 
 locationFromJavaLocation :: MonadIO m =>
                             J.JavaLocation -> VirtualMachine m Location
 locationFromJavaLocation (J.JavaLocation typeTag refId methodId index) = do
-    h <- getVmHandle
-    cntr <- yieldPacketIdCounter
-    liftIO $ J.sendPacket h $ J.signatureCommand cntr refId
-    csr <- J.dat `liftM` (liftIO $ J.waitReply h)
+    reply <- runCommand $ J.signatureCommand refId
+    let csr = J.dat reply
     let classSignature = runGet J.parseString (J.toLazy csr)
-    cntr' <- yieldPacketIdCounter
-    liftIO $ J.sendPacket h $ J.statusCommand cntr' refId
-    str <- J.dat `liftM` (liftIO $ J.waitReply h)
+    reply' <- runCommand $ J.statusCommand refId
+    let str = J.dat reply'
     let status = runGet J.parseClassStatus (J.toLazy str)
     let rt = J.ReferenceType typeTag refId classSignature status
     methodList <- allMethods rt
@@ -774,15 +740,18 @@ signatureToName ('[' : v) = (signatureToName v) ++ "[]"
 
 type SlotComparator = (J.JavaInt -> J.JavaInt -> Bool)
 
+runCommand :: MonadIO m => (J.PacketId -> J.Packet) -> VirtualMachine m J.Packet
+runCommand packet = do
+    h <- getVmHandle
+    cntr <- yieldPacketIdCounter
+    liftIO $ J.sendPacket h $ packet cntr
+    liftIO $ J.waitReply h
+
 getVariables :: MonadIO m => Method -> SlotComparator -> VirtualMachine m [LocalVariable]
 getVariables (Method
             ref@(J.ReferenceType _ refId _ _)
             m@(J.Method mId _ _ _)) comparator = do
-    h <- getVmHandle
-    cntr <- yieldPacketIdCounter
-    let packet = J.variableTableCommand cntr refId mId
-    liftIO $ J.sendPacket h packet
-    reply <- liftIO $ J.waitReply h
+    reply <- runCommand $ J.variableTableCommand refId mId
     if (J.errorCode reply) /= 0
         then throwError AbsentInformationError
         else do

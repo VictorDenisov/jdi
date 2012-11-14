@@ -727,15 +727,15 @@ idSizesCommand packetId = CommandPacket 11 packetId 0 1 7 B.empty
 resumeVmCommand :: PacketId -> Packet
 resumeVmCommand packetId = CommandPacket 11 packetId 0 1 9 B.empty
 
-resumeThreadCommand :: PacketId -> JavaThreadId -> Packet
-resumeThreadCommand packetId threadId = CommandPacket 19 packetId 0 11 3 (toStrict $ runPut $ putThreadId threadId)
+resumeThreadCommand :: JavaThreadId -> PacketId -> Packet
+resumeThreadCommand threadId packetId = CommandPacket 19 packetId 0 11 3 (toStrict $ runPut $ putThreadId threadId)
 
-eventSetRequest :: PacketId
-                -> EventKind
+eventSetRequest :: EventKind
                 -> SuspendPolicy
                 -> [EventModifier]
+                -> PacketId
                 -> Packet
-eventSetRequest packetId ek sp ems =
+eventSetRequest ek sp ems packetId =
     CommandPacket
         (11 + (6 + lengthOfEventModifiers))
         packetId
@@ -746,8 +746,8 @@ eventSetRequest packetId ek sp ems =
     where
         lengthOfEventModifiers = (foldr (+) 0 (map lengthOfEventModifier ems))
 
-eventClearRequest :: PacketId -> EventKind -> JavaInt -> Packet
-eventClearRequest packetId ek requestId =
+eventClearRequest :: EventKind -> JavaInt -> PacketId -> Packet
+eventClearRequest ek requestId packetId =
     CommandPacket
         (11 + 5)
         packetId
@@ -756,8 +756,6 @@ eventClearRequest packetId ek requestId =
         2
         (toStrict $ runPut $ putClearEvent ek requestId)
        
-
-
 capabilitiesCommand :: PacketId -> Packet
 capabilitiesCommand packetId = CommandPacket 11 packetId 0 1 12 B.empty
 
@@ -770,8 +768,8 @@ allClassesCommand packetId = CommandPacket 11 packetId 0 1 3 B.empty
 allThreadsCommand :: PacketId -> Packet
 allThreadsCommand packetId = CommandPacket 11 packetId 0 1 4 B.empty
 
-classesBySignatureCommand :: PacketId -> JavaString -> Packet
-classesBySignatureCommand packetId jniName =
+classesBySignatureCommand :: JavaString -> PacketId -> Packet
+classesBySignatureCommand jniName packetId =
     CommandPacket
         (11 + lengthOfJavaString jniName)
         packetId
@@ -780,7 +778,7 @@ classesBySignatureCommand packetId jniName =
         2
         (toStrict $ runPut $ putString jniName)
 
-exitCommand :: PacketId -> JavaInt -> Packet
+exitCommand :: JavaInt -> PacketId -> Packet
 exitCommand packetId exitCode =
     CommandPacket (11 + 4) packetId 0 1 10 (toStrict $ runPut $ put exitCode)
 
@@ -790,66 +788,66 @@ topLevelThreadGroupsCommand packetId = CommandPacket 11 packetId 0 1 5 B.empty
 disposeCommand :: PacketId -> Packet
 disposeCommand packetId = CommandPacket 11 packetId 0 1 6 B.empty
 
-lineTableCommand :: PacketId -> JavaReferenceTypeId -> JavaMethodId -> Packet
+lineTableCommand :: JavaReferenceTypeId -> JavaMethodId -> PacketId -> Packet
 lineTableCommand
-            packetId
             typeId@(JavaReferenceTypeId rSize _)
-            methodId@(JavaMethodId mSize _) =
+            methodId@(JavaMethodId mSize _)
+            packetId =
     CommandPacket
             (11 + rSize + mSize)
             packetId 0 6 1
             (toStrict $ runPut $ putReferenceTypeId typeId
                                  >> putMethodId methodId)
 
-variableTableCommand :: PacketId -> JavaReferenceTypeId -> JavaMethodId -> Packet
-variableTableCommand packetId
-                     refId@(JavaReferenceTypeId rSize _)
+variableTableCommand :: JavaReferenceTypeId -> JavaMethodId -> PacketId -> Packet
+variableTableCommand refId@(JavaReferenceTypeId rSize _)
                      mId@(JavaMethodId mSize _)
+                     packetId
                      = do
     CommandPacket
         (11 + rSize + mSize)
         packetId 0 6 2
         (toStrict $ runPut $ (putReferenceTypeId refId >> putMethodId mId))
 
-signatureCommand :: PacketId -> JavaReferenceTypeId -> Packet
-signatureCommand packetId typeId@(JavaReferenceTypeId rSize _) =
+signatureCommand :: JavaReferenceTypeId -> PacketId -> Packet
+signatureCommand typeId@(JavaReferenceTypeId rSize _) packetId =
     CommandPacket
         (11 + rSize)
         packetId 0 2 1
         (toStrict $ runPut $ putReferenceTypeId typeId)
 
-methodsCommand :: PacketId -> JavaReferenceTypeId -> Packet
-methodsCommand packetId typeId@(JavaReferenceTypeId size _) =
+methodsCommand :: JavaReferenceTypeId -> PacketId -> Packet
+methodsCommand typeId@(JavaReferenceTypeId size _) packetId =
     CommandPacket
         (11 + size)
         packetId 0 2 5
         (toStrict $ runPut $ putReferenceTypeId typeId)
 
-sourceFileCommand :: PacketId -> JavaReferenceTypeId -> Packet
+sourceFileCommand :: JavaReferenceTypeId -> PacketId -> Packet
 sourceFileCommand
-                packetId
                 typeId@(JavaReferenceTypeId rSize _)
+                packetId
     = CommandPacket
         (11 + rSize)
         packetId 0 2 7
         (toStrict $ runPut $ putReferenceTypeId typeId)
 
-statusCommand :: PacketId -> JavaReferenceTypeId -> Packet
-statusCommand packetId typeId@(JavaReferenceTypeId rSize _) =
+statusCommand :: JavaReferenceTypeId -> PacketId -> Packet
+statusCommand typeId@(JavaReferenceTypeId rSize _) packetId =
     CommandPacket
         (11 + rSize)
         packetId 0 2 9
         (toStrict $ runPut $ putReferenceTypeId typeId)
 
-threadReferenceNameCommand :: PacketId -> JavaThreadId -> Packet
-threadReferenceNameCommand packetId ti@(JavaObjectId size _) =
+threadReferenceNameCommand :: JavaThreadId -> PacketId -> Packet
+threadReferenceNameCommand ti@(JavaObjectId size _) packetId =
     CommandPacket
         (11 + size)
         packetId 0 11 1
         (toStrict $ runPut $ putThreadId ti)
 
-framesCommand :: PacketId -> JavaThreadId -> JavaInt -> JavaInt -> Packet
-framesCommand packetId threadId@(JavaObjectId s _) startFrame len = do
+framesCommand :: JavaThreadId -> JavaInt -> JavaInt -> PacketId -> Packet
+framesCommand threadId@(JavaObjectId s _) startFrame len packetId = do
     CommandPacket
         (11 + s + 4 + 4)
         packetId 0 11 6
