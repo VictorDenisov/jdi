@@ -387,11 +387,18 @@ data ThreadReference = ThreadReference JavaThreadId
 data ThreadGroupReference = ThreadGroupReference JavaThreadGroupId
                             deriving (Eq, Show)
 
-data LineTable = LineTable JavaLong JavaLong [Line] -- start end lines
+data LineTable = LineTable JavaLong JavaLong [Line] -- start, end, lines
                  deriving (Eq, Show)
+
+data VariableTable = VariableTable JavaInt [Slot] -- arg count, slots
+                     deriving (Eq, Show)
 
 data Line = Line JavaLong JavaInt -- codeIndex number
             deriving (Eq, Show)
+
+data Slot = Slot JavaLong String String JavaInt JavaInt
+            deriving (Eq, Show)
+              -- codeIndex, name, signature, length, slot
 
 data StepSize = StepMin
               | StepLine
@@ -665,6 +672,21 @@ parseLineTableReply = do
 parseLine :: Get Line
 parseLine = Line <$> parseLong <*> parseInt
 
+parseVariableTableReply :: Get VariableTable
+parseVariableTableReply = do
+    argCnt <- parseInt
+    slotCount <- parseInt
+    slots <- mapM (\_ -> parseSlot) [1..slotCount]
+    return $ VariableTable argCnt slots
+
+parseSlot :: Get Slot
+parseSlot = Slot
+              <$> parseLong
+              <*> parseString
+              <*> parseString
+              <*> parseInt
+              <*> parseInt
+
 putEventRequest :: EventKind -> SuspendPolicy -> [EventModifier] -> Put
 putEventRequest ek sp ems = do
     putEventKind ek
@@ -778,6 +800,16 @@ lineTableCommand
             packetId 0 6 1
             (toStrict $ runPut $ putReferenceTypeId typeId
                                  >> putMethodId methodId)
+
+variableTableCommand :: PacketId -> JavaReferenceTypeId -> JavaMethodId -> Packet
+variableTableCommand packetId
+                     refId@(JavaReferenceTypeId rSize _)
+                     mId@(JavaMethodId mSize _)
+                     = do
+    CommandPacket
+        (11 + rSize + mSize)
+        packetId 0 6 2
+        (toStrict $ runPut $ (putReferenceTypeId refId >> putMethodId mId))
 
 signatureCommand :: PacketId -> JavaReferenceTypeId -> Packet
 signatureCommand packetId typeId@(JavaReferenceTypeId rSize _) =

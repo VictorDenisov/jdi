@@ -6,6 +6,7 @@ import Network
 import Control.Monad.Trans (liftIO, lift)
 import Control.Applicative ((<$>))
 import Control.Monad (forM_, filterM)
+import Control.Monad.Error (MonadError(..))
 import Data.List
 
 main = do
@@ -44,6 +45,8 @@ main = do
         liftIO . putStrLn =<< (name $ head methods)
         forM_ threads (\thread -> liftIO . putStrLn =<< name thread)
         let methodMain = last methods
+        liftIO . putStrLn $ "Variables of method main: " ++ (show methodMain)
+        (variables methodMain) `catchError` (\_ -> liftIO $ putStrLn "unfortunatelly information is unavailable" >> return [])
         lineTable <- allLineLocations methodMain
         mainLocation <- location methodMain
         liftIO . putStrLn $ intercalate "\n" (map show lineTable)
@@ -54,6 +57,7 @@ main = do
             Breakpoint -> True
             _ -> False
         liftIO . putStrLn $ "breakpoint stopped at location"
+        liftIO . putStrLn $ show methodMain
         loc <- location ev
         liftIO . putStrLn $ show loc
         spr <- enable $ (createStepRequest (thread ev) StepLine StepOver)

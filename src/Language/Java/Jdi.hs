@@ -49,6 +49,8 @@ module Language.Java.Jdi
 , J.StepSize(..)
 , J.StepDepth(..)
 , Method
+, variables
+, LocalVariable
 , Location
 , codeIndex
 , declaringType
@@ -63,7 +65,7 @@ module Language.Java.Jdi
 ) where
 
 import Control.Monad.State (StateT(..), MonadState(..), evalStateT)
-import Control.Monad.Error (ErrorT, runErrorT)
+import Control.Monad.Error (ErrorT, runErrorT, MonadError(..))
 import Control.Monad (guard, when, mapM)
 import qualified Language.Java.Jdwp as J
 import Network (connectTo, PortID)
@@ -87,6 +89,8 @@ newtype VirtualMachine m a = VirtualMachine
     deriving (Monad, MonadIO)
 
 deriving instance Monad m => MonadState Configuration (VirtualMachine m)
+
+deriving instance Monad m => MonadError String (VirtualMachine m)
 
 instance Monad m => Functor (VirtualMachine m) where
     fmap = liftM
@@ -646,6 +650,28 @@ instance Locatable Method where
     location m@(Method ref method) = do
         (J.LineTable _ _ lines) <- receiveLineTable m
         return $ Location ref method (head lines)
+
+variables :: MonadIO m => Method -> VirtualMachine m [LocalVariable]
+variables (Method
+            (J.ReferenceType _ refId _ _)
+            (J.Method mId _ _ _)) = do
+    h <- getVmHandle
+    cntr <- yieldPacketIdCounter
+    let packet = J.variableTableCommand cntr refId mId
+    liftIO $ putStrLn $ show packet
+    liftIO $ J.sendPacket h packet
+    reply <- liftIO $ J.waitReply h
+    if (J.errorCode reply) /= 0
+        then throwError "Unavailable information"
+        else do
+            liftIO $ putStrLn $ show reply
+            let r = J.dat reply
+            liftIO $ putStrLn $ show r
+            let res = runGet J.parseVariableTableReply (J.toLazy r)
+            liftIO $ putStrLn $ show res
+            return []
+
+data LocalVariable = LocalVariable J.ReferenceType J.Method J.Slot
 
 data Location = Location J.ReferenceType J.Method J.Line
                 deriving (Show, Eq)

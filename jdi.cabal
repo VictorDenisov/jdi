@@ -20,7 +20,9 @@ Executable Test
                       , network >= 2.3.0.14
         extensions:     MultiParamTypeClasses
                       , GeneralizedNewtypeDeriving
+                      , TypeSynonymInstances
                       , StandaloneDeriving
+                      , FlexibleInstances
 
 Library
         hs-source-dirs:         src
@@ -36,6 +38,8 @@ Library
         extensions:             MultiParamTypeClasses
                               , GeneralizedNewtypeDeriving
                               , StandaloneDeriving
+                              , TypeSynonymInstances
+                              , FlexibleInstances
 
 Source-repository head
         type:           git
