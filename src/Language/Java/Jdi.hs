@@ -51,6 +51,7 @@ module Language.Java.Jdi
 , Method
 , arguments
 , variables
+, variablesByName
 , LocalVariable
 , Location
 , codeIndex

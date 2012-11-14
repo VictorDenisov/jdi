@@ -8,6 +8,7 @@ import qualified Data.ByteString.Lazy.Char8 as LB8
 import qualified Data.Map as M
 import Data.Binary (Binary(..), Get, Put)
 import Data.Bits ((.&.))
+import Data.Char (ord)
 import Data.List (find)
 import Control.Applicative ((<$>), (<*>))
 import Data.Binary.Get (runGet, getByteString)
@@ -372,6 +373,24 @@ data TypeTag = Class
              | Array
                deriving (Eq, Show)
 
+data Tag = ArrayTag
+         | ByteTag
+         | CharTag
+         | ObjectTag
+         | FloatTag
+         | DoubleTag
+         | IntTag
+         | LongTag
+         | ShortTag
+         | VoidTag
+         | BooleanTag
+         | StringTag
+         | ThreadTag
+         | ThreadGroupTag
+         | ClassLoaderTag
+         | ClassObjectTag
+           deriving (Eq, Show)
+
 newtype ClassStatus = ClassStatus JavaInt
                       deriving (Eq, Show)
 
@@ -491,6 +510,26 @@ typeTagNumbers = [ (1, Class)
                  , (2, Interface)
                  , (3, Array)
                  ]
+
+tagNumbers :: [(JavaByte, Tag)]
+tagNumbers = [ (91 , ArrayTag)
+             , (66 , ByteTag)
+             , (67 , CharTag)
+             , (76 , ObjectTag)
+             , (70 , FloatTag)
+             , (68 , DoubleTag)
+             , (73 , IntTag)
+             , (74 , LongTag)
+             , (83 , ShortTag)
+             , (86 , VoidTag)
+             , (90 , BooleanTag)
+             , (115, StringTag)
+             , (116, ThreadTag)
+             , (103, ThreadGroupTag)
+             , (108, ClassLoaderTag)
+             , (99 , ClassObjectTag)
+             ]
+
 
 --- SuspendPolicy
 putSuspendPolicy :: SuspendPolicy -> Put
@@ -802,8 +841,7 @@ lineTableCommand
 variableTableCommand :: JavaReferenceTypeId -> JavaMethodId -> PacketId -> Packet
 variableTableCommand refId@(JavaReferenceTypeId rSize _)
                      mId@(JavaMethodId mSize _)
-                     packetId
-                     = do
+                     packetId =
     CommandPacket
         (11 + rSize + mSize)
         packetId 0 6 2
@@ -847,13 +885,33 @@ threadReferenceNameCommand ti@(JavaObjectId size _) packetId =
         (toStrict $ runPut $ putThreadId ti)
 
 framesCommand :: JavaThreadId -> JavaInt -> JavaInt -> PacketId -> Packet
-framesCommand threadId@(JavaObjectId s _) startFrame len packetId = do
+framesCommand threadId@(JavaObjectId s _) startFrame len packetId =
     CommandPacket
         (11 + s + 4 + 4)
         packetId 0 11 6
-        (toStrict $ runPut $ (putThreadId threadId
-                           >> putInt startFrame
-                           >> putInt len))
+        (toStrict $ runPut $ do
+                            putThreadId threadId
+                            putInt startFrame
+                            putInt len)
+
+getValuesCommand :: JavaThreadId -> JavaFrameId -> [Slot] -> PacketId -> Packet
+getValuesCommand
+            threadId@(JavaObjectId st _)
+            frameId@(JavaFrameId sf _)
+            slots
+            packetId =
+    CommandPacket
+        (11 + st + sf + (4 + 2) * (fromIntegral $ length slots))
+        packetId 0 16 1
+        (toStrict $ runPut $ do
+                            putThreadId threadId
+                            putFrameId  frameId
+                            putInt (fromIntegral $ length slots)
+                            putSlots slots)
+    where
+        putSlots = mapM_ $ \(Slot _ _ sig _ slot) -> do
+            putInt slot
+            putByte $ fromIntegral $ ord $ head sig
 -- }}}
 ------------Jdwp communication functions
 -- {{{
