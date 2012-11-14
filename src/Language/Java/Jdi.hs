@@ -49,6 +49,7 @@ module Language.Java.Jdi
 , J.StepSize(..)
 , J.StepDepth(..)
 , Method
+, arguments
 , variables
 , LocalVariable
 , Location
@@ -667,27 +668,14 @@ instance Locatable Method where
         (J.LineTable _ _ lines) <- receiveLineTable m
         return $ Location ref method (head lines)
 
+arguments :: MonadIO m => Method -> VirtualMachine m [LocalVariable]
+arguments method = getVariables method (>)
+
 variables :: MonadIO m => Method -> VirtualMachine m [LocalVariable]
-variables (Method
-            (J.ReferenceType _ refId _ _)
-            (J.Method mId _ _ _)) = do
-    h <- getVmHandle
-    cntr <- yieldPacketIdCounter
-    let packet = J.variableTableCommand cntr refId mId
-    liftIO $ putStrLn $ show packet
-    liftIO $ J.sendPacket h packet
-    reply <- liftIO $ J.waitReply h
-    if (J.errorCode reply) /= 0
-        then throwError AbsentInformationError
-        else do
-            liftIO $ putStrLn $ show reply
-            let r = J.dat reply
-            liftIO $ putStrLn $ show r
-            let res = runGet J.parseVariableTableReply (J.toLazy r)
-            liftIO $ putStrLn $ show res
-            return []
+variables method = getVariables method (<=)
 
 data LocalVariable = LocalVariable J.ReferenceType J.Method J.Slot
+                     deriving (Show, Eq)
 
 data Location = Location J.ReferenceType J.Method J.Line
                 deriving (Show, Eq)
@@ -783,5 +771,25 @@ signatureToName ('L' : v) = (flip map) (init v) $
         '/' -> '.'
         v   -> v
 signatureToName ('[' : v) = (signatureToName v) ++ "[]"
+
+type SlotComparator = (J.JavaInt -> J.JavaInt -> Bool)
+
+getVariables :: MonadIO m => Method -> SlotComparator -> VirtualMachine m [LocalVariable]
+getVariables (Method
+            ref@(J.ReferenceType _ refId _ _)
+            m@(J.Method mId _ _ _)) comparator = do
+    h <- getVmHandle
+    cntr <- yieldPacketIdCounter
+    let packet = J.variableTableCommand cntr refId mId
+    liftIO $ J.sendPacket h packet
+    reply <- liftIO $ J.waitReply h
+    if (J.errorCode reply) /= 0
+        then throwError AbsentInformationError
+        else do
+            let (J.VariableTable argCount varList) = runGet J.parseVariableTableReply (J.toLazy $ J.dat reply)
+            let slots = filter ((argCount `comparator`) . slot) varList
+            return $ map (LocalVariable ref m) slots
+    where
+        slot (J.Slot _ _ _ _ s) = s
 
 -- vim: foldmethod=marker foldmarker={{{,}}}

@@ -5,7 +5,7 @@ import Network.Socket.Internal (PortNumber(..))
 import Network
 import Control.Monad.Trans (liftIO, lift)
 import Control.Applicative ((<$>))
-import Control.Monad (forM_, filterM, void)
+import Control.Monad (forM_, filterM, void, liftM)
 import Control.Monad.Error (MonadError(..))
 import Data.List
 
@@ -44,17 +44,24 @@ main = do
         liftIO . putStrLn =<< vmName
         liftIO . putStrLn =<< (name $ head methods)
         forM_ threads (\thread -> liftIO . putStrLn =<< name thread)
-        let methodMain = last methods
-        liftIO . putStrLn $ "Variables of method main: " ++ (show methodMain)
-        (void $ variables methodMain)
+        let isMainMethod = (liftM ("main" ==)) . name
+        methodMain <- head <$> (filterM isMainMethod methods)
+        let isAnotherMethod = (liftM ("anotherMethod" ==)) . name
+        anotherMethod <- head <$> (filterM isAnotherMethod methods)
+        liftIO . putStrLn $ "Variables of method anotherMethod: " ++ (show anotherMethod)
+        (arguments anotherMethod >>= \l -> liftIO $ putStrLn $ show l)
             `catchError`
-                (\ee -> liftIO $ putStrLn $ "error during variables: " ++ (show ee))
+                (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
+        liftIO . putStrLn $ "Printing line table"
         lineTable <- allLineLocations methodMain
+        liftIO . putStrLn $ "After line table"
         mainLocation <- location methodMain
         liftIO . putStrLn $ intercalate "\n" (map show lineTable)
         classLineLocations <- allLineLocations mainClass
         liftIO . putStrLn $ intercalate "\n" (map show classLineLocations)
+        liftIO . putStrLn $ "Enabling breakpoint request"
         bpr <- enable $ createBreakpointRequest mainLocation
+        liftIO . putStrLn $ "breakpoint request is enabled"
         ev <- pollEvents $ \e -> case eventKind e of
             Breakpoint -> True
             _ -> False
