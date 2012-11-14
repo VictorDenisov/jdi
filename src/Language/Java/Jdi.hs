@@ -67,7 +67,6 @@ module Language.Java.Jdi
 
 import Control.Monad.State (StateT(..), MonadState(..), evalStateT)
 import Control.Monad.Error (ErrorT, runErrorT, MonadError(..), Error(..))
-import Control.Monad (guard, when, mapM, void)
 import qualified Language.Java.Jdwp as J
 import Network (connectTo, PortID)
 import qualified Data.Map as M
@@ -76,7 +75,7 @@ import GHC.IO.Handle (Handle, hClose, hSetBinaryMode, hPutStr, hFlush)
 import Control.Monad.Trans (liftIO, lift, MonadTrans)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Applicative ((<$>), Applicative(..))
-import Control.Monad (liftM, ap)
+import Control.Monad (liftM, liftM2, ap, guard, when, mapM, void, filterM)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as B8
 import Data.Binary.Get (runGet)
@@ -651,6 +650,10 @@ arguments method = getVariables method (>)
 
 variables :: MonadIO m => Method -> VirtualMachine m [LocalVariable]
 variables method = getVariables method (<=)
+
+variablesByName :: MonadIO m => Method -> String -> VirtualMachine m [LocalVariable]
+variablesByName method varName =
+    variables method >>= filterM (((varName ==) <$>) . name)
 
 data LocalVariable = LocalVariable J.ReferenceType J.Method J.Slot
                      deriving (Show, Eq)
