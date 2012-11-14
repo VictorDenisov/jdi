@@ -65,7 +65,7 @@ module Language.Java.Jdi
 ) where
 
 import Control.Monad.State (StateT(..), MonadState(..), evalStateT)
-import Control.Monad.Error (ErrorT, runErrorT, MonadError(..))
+import Control.Monad.Error (ErrorT, runErrorT, MonadError(..), Error(..))
 import Control.Monad (guard, when, mapM)
 import qualified Language.Java.Jdwp as J
 import Network (connectTo, PortID)
@@ -85,12 +85,12 @@ import GHC.IO.Handle (hWaitForInput)
 import qualified Data.Sequence as S
 
 newtype VirtualMachine m a = VirtualMachine
-    { unVm :: StateT Configuration (ErrorT String m) a }
+    { unVm :: StateT Configuration (ErrorT ErrorType m) a }
     deriving (Monad, MonadIO)
 
 deriving instance Monad m => MonadState Configuration (VirtualMachine m)
 
-deriving instance Monad m => MonadError String (VirtualMachine m)
+deriving instance Monad m => MonadError ErrorType (VirtualMachine m)
 
 instance Monad m => Functor (VirtualMachine m) where
     fmap = liftM
@@ -101,6 +101,13 @@ instance Monad m => Applicative (VirtualMachine m) where
 
 instance MonadTrans VirtualMachine where
     lift = VirtualMachine . lift . lift
+
+data ErrorType = HandshakeError
+               | AbsentInformationError
+                 deriving (Read, Show, Eq)
+
+instance Error ErrorType where
+    strMsg s = read s
 
 -- Configuration description
 ---- {{{
@@ -192,6 +199,15 @@ setCapabilities :: Monad m => J.Capabilities -> VirtualMachine m ()
 setCapabilities c = do
     s <- get
     put $ s { capabilities = (Just c) }
+
+handshake :: MonadIO m => Handle -> ErrorT ErrorType m ()
+handshake h = do
+    liftIO $ putStrLn "Connected. Initiating handshake..."
+    liftIO $ hPutStr h "JDWP-Handshake"
+    liftIO $ hFlush h
+    value <- liftIO $ B.hGet h 14
+    when (value /= (B8.pack "JDWP-Handshake")) $ throwError HandshakeError
+    liftIO $ putStrLn "Handshake successful."
 -- }}}
 
 {- | Executes source code which communicates with virtual machine.
@@ -206,11 +222,11 @@ runVirtualMachine host port vm = do
     h <- liftIO $ connectTo host port
     liftIO $ hSetBinaryMode h True
     result <- runErrorT $ runStateT
-                            (unVm ((VirtualMachine (lift (J.handshake h))) >> (preflight >> vm >> releaseResources)))
+                            (unVm ((VirtualMachine (lift (handshake h))) >> (preflight >> vm >> releaseResources)))
                             (initialConfiguration h)
     case result of
         Right ((), state) -> return ()
-        Left s -> liftIO $ putStrLn $ "Execution failed with message: " ++ s
+        Left s -> liftIO $ putStrLn $ "Execution failed with message: " ++ (show s)
 
 preflight :: MonadIO m => VirtualMachine m ()
 preflight = do
@@ -662,7 +678,7 @@ variables (Method
     liftIO $ J.sendPacket h packet
     reply <- liftIO $ J.waitReply h
     if (J.errorCode reply) /= 0
-        then throwError "Unavailable information"
+        then throwError AbsentInformationError
         else do
             liftIO $ putStrLn $ show reply
             let r = J.dat reply

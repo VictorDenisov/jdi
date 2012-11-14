@@ -860,15 +860,6 @@ framesCommand packetId threadId@(JavaObjectId s _) startFrame len = do
 ------------Jdwp communication functions
 -- {{{
 
-handshake :: MonadIO m => Handle -> ErrorT String m ()
-handshake h = do
-    liftIO $ putStrLn "Connected. Initiating handshake..."
-    liftIO $ hPutStr h "JDWP-Handshake"
-    liftIO $ hFlush h
-    value <- liftIO $ B.hGet h 14
-    when (value /= (B8.pack "JDWP-Handshake")) $ fail "Handshake FAILED."
-    liftIO $ putStrLn "Handshake successful."
-
 receivePacket :: Handle -> IO Packet
 receivePacket h = do
     inputAvailable <- hWaitForInput h (-1)
