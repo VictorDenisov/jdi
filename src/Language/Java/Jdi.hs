@@ -655,6 +655,9 @@ variables method = getVariables method (<=)
 data LocalVariable = LocalVariable J.ReferenceType J.Method J.Slot
                      deriving (Show, Eq)
 
+instance Name LocalVariable where
+    name (LocalVariable _ _ (J.Slot _ nm _ _ _)) = return nm
+
 data Location = Location J.ReferenceType J.Method J.Line
                 deriving (Show, Eq)
 
