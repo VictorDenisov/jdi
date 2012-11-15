@@ -624,14 +624,7 @@ data StackFrame = StackFrame J.ThreadReference J.StackFrame
 
 getValue :: MonadIO m => StackFrame -> LocalVariable -> VirtualMachine m J.Value
 getValue (StackFrame (J.ThreadReference ti) (J.StackFrame fi _)) (LocalVariable _ _ slot) = do
-    liftIO . putStrLn $ "getValue method"
-    liftIO . putStrLn $ "threadId " ++ show ti
-    liftIO . putStrLn $ "frameId " ++ show fi
-    liftIO . putStrLn $ show slot
-    let packet = J.getValuesCommand ti fi [slot]
-    liftIO $ B.writeFile "ttt.txt" (J.dat $ packet 0)
-    reply <- runCommand packet
-    liftIO . putStrLn $ show reply
+    reply <- runCommand $ J.getValuesCommand ti fi [slot]
     idsizes <- getIdSizes
     return $ head $ runGet (J.parseGetValuesReply idsizes) (J.toLazy $ J.dat reply)
 
