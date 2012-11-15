@@ -430,6 +430,24 @@ data StepDepth = StepInto
 
 data StackFrame = StackFrame JavaFrameId JavaLocation
 
+data Value = ArrayValue JavaObjectId
+           | ByteValue Word8
+           | CharValue Word16
+           | ObjectValue JavaObjectId
+           | FloatValue Word32
+           | DoubleValue Word64
+           | IntValue Word32
+           | LongValue Word64
+           | ShortValue Word16
+           | VoidValue
+           | BooleanValue Word8
+           | StringValue JavaObjectId
+           | ThreadValue JavaObjectId
+           | ThreadGroupValue JavaObjectId
+           | ClassLoaderValue JavaObjectId
+           | ClassObjectValue JavaObjectId
+             deriving (Eq, Show)
+
 data Capabilities = Capabilities
     { canWatchFieldModification        :: JavaBoolean
     , canWatchFieldAccess              :: JavaBoolean
@@ -558,6 +576,10 @@ putTypeTag t = put $ (toNumber typeTagNumbers) t
 
 parseTypeTag :: Get TypeTag
 parseTypeTag = (fromNumber typeTagNumbers) <$> (get :: Get JavaByte)
+
+--- Tag
+parseTag :: Get Tag
+parseTag = (fromNumber tagNumbers) <$> (get :: Get JavaByte)
 
 --- StepSize
 putStepSize :: StepSize -> Put
@@ -725,6 +747,32 @@ parseSlot = Slot
               <*> parseString
               <*> parseInt
               <*> parseInt
+
+parseGetValuesReply :: IdSizes -> Get [Value]
+parseGetValuesReply idsizes = do
+    valuesCount <- parseInt
+    mapM (\_ -> parseValue idsizes) [1..valuesCount]
+
+parseValue :: IdSizes -> Get Value
+parseValue idsizes = do
+    tg <- parseTag
+    case tg of
+        ArrayTag -> ArrayValue <$> parseObjectId (objectIdSize idsizes)
+        ByteTag -> ByteValue <$> (get :: Get Word8)
+        CharTag -> CharValue <$> (get :: Get Word16)
+        ObjectTag -> ObjectValue <$> parseObjectId (objectIdSize idsizes)
+        FloatTag -> FloatValue <$> (get :: Get Word32)
+        DoubleTag -> DoubleValue <$> (get :: Get Word64)
+        IntTag -> IntValue <$> (get :: Get Word32)
+        LongTag -> LongValue <$> (get :: Get Word64)
+        ShortTag -> ShortValue <$> (get :: Get Word16)
+        VoidTag -> return VoidValue
+        BooleanTag -> BooleanValue <$> (get :: Get Word8)
+        StringTag -> StringValue <$> parseObjectId (objectIdSize idsizes)
+        ThreadTag -> ThreadValue <$> parseObjectId (objectIdSize idsizes)
+        ThreadGroupTag -> ThreadGroupValue <$> parseObjectId (objectIdSize idsizes)
+        ClassLoaderTag -> ClassLoaderValue <$> parseObjectId (objectIdSize idsizes)
+        ClassObjectTag -> ClassObjectValue <$> parseObjectId (objectIdSize idsizes)
 
 putEventRequest :: EventKind -> SuspendPolicy -> [EventModifier] -> Put
 putEventRequest ek sp ems = do
