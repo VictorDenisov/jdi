@@ -52,6 +52,19 @@ main = do
         (arguments anotherMethod >>= \l -> liftIO $ putStrLn $ show l)
             `catchError`
                 (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
+        liftIO . putStrLn $ "Variables of method main: " ++ (show methodMain)
+        (variables methodMain >>= \l -> liftIO $ putStrLn $ show l)
+            `catchError`
+                (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
+
+        liftIO . putStrLn $ "VariablesByName"
+        (variablesByName methodMain "i" >>= \l -> liftIO $ putStrLn $ show l)
+            `catchError`
+                (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
+        liftIO . putStrLn $ "Arguments of the method main"
+        (arguments methodMain >>= \l -> liftIO $ putStrLn $ show l)
+            `catchError`
+                (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
         liftIO . putStrLn $ "Printing line table"
         lineTable <- allLineLocations methodMain
         liftIO . putStrLn $ "After line table"
@@ -70,6 +83,31 @@ main = do
         loc <- location ev
         liftIO . putStrLn $ show loc
         spr <- enable $ (createStepRequest (thread ev) StepLine StepOver)
+        resumeVm
+        void $ removeEvent
+        resumeVm
+        void $ removeEvent
+        --resumeVm
+        --void $ removeEvent
+
+        liftIO . putStrLn $ "trying step requests"
+        resumeVm
+        es0 <- removeEvent
+        let e0 = head $ events es0
+        liftIO $ putStrLn $ show e0
+
+        v0 <- getValueOfI $ thread e0
+        liftIO $ putStrLn $ show v0
+
+        resumeVm
+        void $ removeEvent
+        resumeVm
+        es1 <- removeEvent
+        let e1 = head $ events es1
+        liftIO $ putStrLn $ show e1
+
+        v1 <- getValueOfI $ thread e1
+        liftIO $ putStrLn $ show v1
 
         pollEvents $ \e -> case eventKind e of
             VmDeath -> True
@@ -77,6 +115,15 @@ main = do
         lift . putStrLn $ "Exiting"
 
         --dispose
+
+getValueOfI curThread = do
+    fr <- head <$> frames curThread 0 0
+    liftIO $ putStrLn $ show fr
+    loc <- location fr
+    liftIO $ putStrLn $ show loc
+    var <- head <$> variablesByName (method loc) "i"
+    liftIO $ putStrLn $ show var
+    getValue fr var
 
 pollEvents stopFunction = do
     resumeVm

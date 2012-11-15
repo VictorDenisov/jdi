@@ -43,8 +43,10 @@ module Language.Java.Jdi
 , J.ReferenceType
 , genericSignature
 , allMethods
-, J.StackFrame
+, StackFrame
+, getValue
 , J.ThreadReference
+, frames
 , J.ThreadGroupReference
 , J.StepSize(..)
 , J.StepDepth(..)
@@ -536,6 +538,10 @@ thread (J.BreakpointEvent
             _
             threadId
             _) = J.ThreadReference threadId
+thread (J.StepEvent
+            _
+            threadId
+            _) = J.ThreadReference threadId
 
 data EventRequest = EventRequest
                         J.SuspendPolicy
@@ -613,6 +619,26 @@ allMethods rt@(J.ReferenceType _ refId _ _) = do
 instance Name J.ReferenceType where
     name = return . signatureToName . genericSignature
 
+data StackFrame = StackFrame J.ThreadReference J.StackFrame
+                  deriving (Eq, Show)
+
+getValue :: MonadIO m => StackFrame -> LocalVariable -> VirtualMachine m J.Value
+getValue (StackFrame (J.ThreadReference ti) (J.StackFrame fi _)) (LocalVariable _ _ slot) = do
+    liftIO . putStrLn $ "getValue method"
+    liftIO . putStrLn $ "threadId " ++ show ti
+    liftIO . putStrLn $ "frameId " ++ show fi
+    liftIO . putStrLn $ show slot
+    let packet = J.getValuesCommand ti fi [slot]
+    liftIO $ B.writeFile "ttt.txt" (J.dat $ packet 0)
+    reply <- runCommand packet
+    liftIO . putStrLn $ show reply
+    idsizes <- getIdSizes
+    return $ head $ runGet (J.parseGetValuesReply idsizes) (J.toLazy $ J.dat reply)
+
+instance Locatable StackFrame where
+    location (StackFrame _ (J.StackFrame _ javaLoc))
+                        = locationFromJavaLocation javaLoc
+
 instance Name J.ThreadReference where
     name (J.ThreadReference refId) = do
         reply <- runCommand $ J.threadReferenceNameCommand refId
@@ -623,12 +649,12 @@ instance Name J.ThreadReference where
 instance Resumable J.ThreadReference where
     resume (J.ThreadReference tId) = resumeThreadId tId
 
-frames :: MonadIO m => J.ThreadReference -> Int -> Int -> VirtualMachine m [J.StackFrame]
+frames :: MonadIO m => J.ThreadReference -> Int -> Int -> VirtualMachine m [StackFrame]
 frames tr@(J.ThreadReference ti) start len = do
     idsizes <- getIdSizes
     reply <- runCommand $ J.framesCommand ti 0 (-1)
     let r = J.dat reply
-    return $ runGet (J.parseStackFrameList idsizes) (J.toLazy r)
+    return $ map (StackFrame tr) $ runGet (J.parseStackFrameList idsizes) (J.toLazy r)
 
 data Method = Method J.ReferenceType J.Method
               deriving (Eq, Show)

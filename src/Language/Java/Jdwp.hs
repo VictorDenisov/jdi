@@ -429,6 +429,7 @@ data StepDepth = StepInto
                  deriving (Eq, Show)
 
 data StackFrame = StackFrame JavaFrameId JavaLocation
+                  deriving (Eq, Show)
 
 data Value = ArrayValue JavaObjectId
            | ByteValue Word8
@@ -949,7 +950,7 @@ getValuesCommand
             slots
             packetId =
     CommandPacket
-        (11 + st + sf + (4 + 2) * (fromIntegral $ length slots))
+        (11 + st + sf + 4 + (4 + 1) * (fromIntegral $ length slots))
         packetId 0 16 1
         (toStrict $ runPut $ do
                             putThreadId threadId
