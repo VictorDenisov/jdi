@@ -87,34 +87,11 @@ import Data.List (find)
 import GHC.IO.Handle (hWaitForInput)
 import qualified Data.Sequence as S
 
-newtype VirtualMachine m a = VirtualMachine
-    { unVm :: StateT Configuration (ErrorT ErrorType m) a }
-    deriving (Monad, MonadIO)
+type VirtualMachine = StateT VmState
 
-deriving instance Monad m => MonadState Configuration (VirtualMachine m)
-
-deriving instance Monad m => MonadError ErrorType (VirtualMachine m)
-
-instance Monad m => Functor (VirtualMachine m) where
-    fmap = liftM
-
-instance Monad m => Applicative (VirtualMachine m) where
-    pure = return
-    (<*>) = ap
-
-instance MonadTrans VirtualMachine where
-    lift = VirtualMachine . lift . lift
-
-data ErrorType = HandshakeError
-               | AbsentInformationError
-                 deriving (Read, Show, Eq)
-
-instance Error ErrorType where
-    strMsg s = read s
-
--- Configuration description
+-- VmState
 ---- {{{
-data Configuration = Configuration
+data VmState = VmState
     { idSizesConf     :: Maybe J.IdSizes
     , packetIdCounter :: J.PacketId
     , vmHandle        :: Handle
@@ -203,20 +180,18 @@ setCapabilities c = do
     s <- get
     put $ s { capabilities = (Just c) }
 
-handshake :: MonadIO m => Handle -> ErrorT ErrorType m ()
+handshake :: (MonadIO m, MonadError String m) => Handle -> VirtualMachine m ()
 handshake h = do
-    liftIO $ putStrLn "Connected. Initiating handshake..."
     liftIO $ hPutStr h "JDWP-Handshake"
     liftIO $ hFlush h
     value <- liftIO $ B.hGet h 14
-    when (value /= (B8.pack "JDWP-Handshake")) $ throwError HandshakeError
-    liftIO $ putStrLn "Handshake successful."
+    when (value /= (B8.pack "JDWP-Handshake")) $ throwError "Handshake failed"
 -- }}}
 
 {- | Executes source code which communicates with virtual machine.
  Source code is executed for Vm running on the defined host and port.
  -}
-runVirtualMachine :: MonadIO m =>
+runVirtualMachine :: (MonadIO m, MonadError String m) =>
        String -- ^ Host address.
     -> PortID -- ^ Port.
     -> VirtualMachine m () -- ^ Monad to run.
@@ -224,12 +199,9 @@ runVirtualMachine :: MonadIO m =>
 runVirtualMachine host port vm = do
     h <- liftIO $ connectTo host port
     liftIO $ hSetBinaryMode h True
-    result <- runErrorT $ runStateT
-                            (unVm ((VirtualMachine (lift (handshake h))) >> (preflight >> vm >> releaseResources)))
-                            (initialConfiguration h)
-    case result of
-        Right ((), state) -> return ()
-        Left s -> liftIO $ putStrLn $ "Execution failed with message: " ++ (show s)
+    runStateT ((handshake h) >> (preflight >> vm >> releaseResources))
+              (initialVmState h)
+    return ()
 
 preflight :: MonadIO m => VirtualMachine m ()
 preflight = do
@@ -270,8 +242,8 @@ releaseResources = do
     s <- get
     liftIO $ hClose $ vmHandle s
 
-initialConfiguration :: Handle -> Configuration
-initialConfiguration h = Configuration Nothing 0 h S.empty Nothing Nothing
+initialVmState :: Handle -> VmState
+initialVmState h = VmState Nothing 0 h S.empty Nothing Nothing
 
 -- Classes definitions.
 -- {{{
@@ -588,9 +560,9 @@ disable (EventRequest
                 suspendPolicy
                 (Just requestId)
                 modifiers
-                er@(ClassPrepareRequest{})) = do
-    void $ runCommand $ J.eventClearRequest J.ClassPrepare requestId
-    return $ EventRequest suspendPolicy Nothing modifiers er
+                er@(ClassPrepareRequest{})) =
+    runCommand (J.eventClearRequest J.ClassPrepare requestId) >>
+    return (EventRequest suspendPolicy Nothing modifiers er)
 
 addCountFilter :: Int -> EventRequest -> EventRequest
 addCountFilter count (EventRequest sp ri ems er) =
@@ -665,15 +637,18 @@ instance Locatable Method where
         (J.LineTable _ _ lines) <- receiveLineTable m
         return $ Location ref method (head lines)
 
-arguments :: MonadIO m => Method -> VirtualMachine m [LocalVariable]
+arguments :: (MonadIO m, MonadError String m) =>
+             Method -> VirtualMachine m [LocalVariable]
 arguments method = getVariables method (>)
 
-variables :: MonadIO m => Method -> VirtualMachine m [LocalVariable]
+variables :: (MonadIO m, MonadError String m) =>
+             Method -> VirtualMachine m [LocalVariable]
 variables method = getVariables method (<=)
 
-variablesByName :: MonadIO m => Method -> String -> VirtualMachine m [LocalVariable]
+variablesByName :: (MonadIO m, MonadError String m) =>
+                   Method -> String -> VirtualMachine m [LocalVariable]
 variablesByName method varName =
-    variables method >>= filterM (((varName ==) <$>) . name)
+    variables method >>= filterM (((varName ==) `liftM`) . name)
 
 data LocalVariable = LocalVariable J.ReferenceType J.Method J.Slot
                      deriving (Show, Eq)
@@ -707,7 +682,7 @@ instance SourceName J.ReferenceType where
         return sourceName
 
 instance AllLineLocations J.ReferenceType where
-    allLineLocations refType = concat <$> ((mapM allLineLocations) =<< (allMethods refType))
+    allLineLocations refType = concat `liftM` ((mapM allLineLocations) =<< (allMethods refType))
 
 -- }}}
 
@@ -728,8 +703,7 @@ receiveLineTable (Method (J.ReferenceType _ refId _ _)
     return $ runGet J.parseLineTableReply (J.toLazy r)
 
 resumeThreadId :: MonadIO m => J.JavaThreadId -> VirtualMachine m ()
-resumeThreadId tId = do
-    void $ runCommand $ J.resumeThreadCommand tId
+resumeThreadId tId = runCommand (J.resumeThreadCommand tId) >> return ()
 
 locationFromJavaLocation :: MonadIO m =>
                             J.JavaLocation -> VirtualMachine m Location
@@ -773,13 +747,14 @@ runCommand packet = do
     liftIO $ J.sendPacket h $ packet cntr
     liftIO $ J.waitReply h
 
-getVariables :: MonadIO m => Method -> SlotComparator -> VirtualMachine m [LocalVariable]
+getVariables :: (MonadIO m, MonadError String m) =>
+                Method -> SlotComparator -> VirtualMachine m [LocalVariable]
 getVariables (Method
             ref@(J.ReferenceType _ refId _ _)
             m@(J.Method mId _ _ _)) comparator = do
     reply <- runCommand $ J.variableTableCommand refId mId
     if (J.errorCode reply) /= 0
-        then throwError AbsentInformationError
+        then throwError "Information about variables is absent"
         else do
             let (J.VariableTable argCount varList) = runGet J.parseVariableTableReply (J.toLazy $ J.dat reply)
             let slots = filter ((argCount `comparator`) . slot) varList

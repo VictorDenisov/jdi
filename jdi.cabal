@@ -23,6 +23,7 @@ Executable Test
                       , TypeSynonymInstances
                       , StandaloneDeriving
                       , FlexibleInstances
+                      , FlexibleContexts
 
 Library
         hs-source-dirs:         src
@@ -40,6 +41,7 @@ Library
                               , StandaloneDeriving
                               , TypeSynonymInstances
                               , FlexibleInstances
+                              , FlexibleContexts
 
 Source-repository head
         type:           git

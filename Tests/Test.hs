@@ -6,11 +6,17 @@ import Network
 import Control.Monad.Trans (liftIO, lift)
 import Control.Applicative ((<$>))
 import Control.Monad (forM_, filterM, void, liftM)
-import Control.Monad.Error (MonadError(..))
+import Control.Monad.Error (MonadError(..), runErrorT, ErrorT)
 import Data.List
 
 main = do
-    runVirtualMachine "localhost" (PortNumber 2044) $ do
+    result <- runErrorT $ runVirtualMachine "localhost" (PortNumber 2044) body
+    case result of
+            Right _ -> putStrLn "Execution ok"
+            Left e  -> putStrLn $ "Error: " ++ e
+
+body :: VirtualMachine (ErrorT String IO) ()
+body = do
         jdv <- version
         liftIO . putStrLn $ "JdwpVersion: " ++ (show jdv)
         es <- removeEvent
@@ -112,7 +118,7 @@ main = do
         pollEvents $ \e -> case eventKind e of
             VmDeath -> True
             _ -> False
-        lift . putStrLn $ "Exiting"
+        liftIO . putStrLn $ "Exiting"
 
         --dispose
 
