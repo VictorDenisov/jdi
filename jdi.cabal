@@ -1,5 +1,5 @@
 Name:           jdi
-Version:        0.0.3
+Version:        0.0.4
 Description:    Implementation of Java Debug Interface
 Synopsis:       Implementation of Java Debug Interface
 Copyright:      2012 Victor Denisov
@@ -15,7 +15,7 @@ Cabal-version:  >=1.8
 Executable Test
         main-is:        Tests/Test.hs
         build-depends:  base >= 3
-                      , jdi >= 0.0.3
+                      , jdi >= 0.0.4
                       , mtl >= 2.1.2
                       , network >= 2.3.0.14
         extensions:     MultiParamTypeClasses

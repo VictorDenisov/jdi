@@ -123,7 +123,7 @@ body = do
         --dispose
 
 getValueOfI curThread = do
-    fr <- head <$> frames curThread 0 0
+    fr <- head <$> allFrames curThread
     liftIO $ putStrLn $ show fr
     loc <- location fr
     liftIO $ putStrLn $ show loc

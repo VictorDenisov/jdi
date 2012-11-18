@@ -46,6 +46,7 @@ module Language.Java.Jdi
 , StackFrame
 , getValue
 , J.ThreadReference
+, allFrames
 , frames
 , J.ThreadGroupReference
 , J.StepSize(..)
@@ -614,10 +615,21 @@ instance Name J.ThreadReference where
 instance Resumable J.ThreadReference where
     resume (J.ThreadReference tId) = resumeThreadId tId
 
-frames :: MonadIO m => J.ThreadReference -> Int -> Int -> VirtualMachine m [StackFrame]
-frames tr@(J.ThreadReference ti) start len = do
+allFrames :: MonadIO m => J.ThreadReference -> VirtualMachine m [StackFrame]
+allFrames tr = getFrames tr 0 (-1)
+
+frames :: (MonadIO m, MonadError String m) =>
+          J.ThreadReference -> Int -> Int -> VirtualMachine m [StackFrame]
+frames tr start len = do
+    when (start < 0) $ throwError "negative start"
+    when (len < 0) $ throwError "negative len"
+    getFrames tr start len
+
+-- This is unsafe implementation of frames command.
+getFrames :: MonadIO m => J.ThreadReference -> Int -> Int -> VirtualMachine m [StackFrame]
+getFrames tr@(J.ThreadReference ti) start len = do
     idsizes <- getIdSizes
-    reply <- runCommand $ J.framesCommand ti 0 (-1)
+    reply <- runCommand $ J.framesCommand ti (fromIntegral start) (fromIntegral len)
     let r = J.dat reply
     return $ map (StackFrame tr) $ runGet (J.parseStackFrameList idsizes) (J.toLazy r)
 
