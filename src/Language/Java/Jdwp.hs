@@ -943,6 +943,13 @@ framesCommand threadId@(JavaObjectId s _) startFrame len packetId =
                             putInt startFrame
                             putInt len)
 
+frameCountCommand :: JavaThreadId -> PacketId -> Packet
+frameCountCommand threadId@(JavaObjectId s _) packetId =
+    CommandPacket
+        (11 + s)
+        packetId 0 11 7
+        (toStrict $ runPut $ putThreadId threadId)
+
 getValuesCommand :: JavaThreadId -> JavaFrameId -> [Slot] -> PacketId -> Packet
 getValuesCommand
             threadId@(JavaObjectId st _)
