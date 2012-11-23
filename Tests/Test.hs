@@ -123,6 +123,8 @@ body = do
         --dispose
 
 getValueOfI curThread = do
+    frCnt <- frameCount curThread
+    liftIO $ putStrLn $ "Frame count: " ++ (show frCnt)
     fr <- head <$> allFrames curThread
     liftIO $ putStrLn $ show fr
     loc <- location fr

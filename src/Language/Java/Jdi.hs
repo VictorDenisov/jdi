@@ -47,6 +47,7 @@ module Language.Java.Jdi
 , getValue
 , J.ThreadReference
 , allFrames
+, frameCount
 , frames
 , J.ThreadGroupReference
 , J.StepSize(..)
@@ -250,19 +251,19 @@ initialVmState h = VmState Nothing 0 h S.empty Nothing Nothing
 -- {{{
 
 class Name a where
-    name :: MonadIO m => a -> VirtualMachine m String
+    name :: (MonadIO m, MonadError String m) => a -> VirtualMachine m String
 
 class Resumable a where
-    resume :: MonadIO m => a -> VirtualMachine m ()
+    resume :: (MonadIO m, MonadError String m) => a -> VirtualMachine m ()
 
 class Locatable a where
-    location :: MonadIO m => a -> VirtualMachine m Location
+    location :: (MonadIO m, MonadError String m) => a -> VirtualMachine m Location
 
 class SourceName a where
-    sourceName :: MonadIO m => a -> VirtualMachine m String
+    sourceName :: (MonadIO m, MonadError String m) => a -> VirtualMachine m String
 
 class AllLineLocations a where
-    allLineLocations :: MonadIO m => a -> VirtualMachine m [Location]
+    allLineLocations :: (MonadIO m, MonadError String m) => a -> VirtualMachine m [Location]
 
 -- }}}
 
@@ -379,7 +380,7 @@ canUnrestrictedlyRedefineClasses =
  The returned list will include reference types loaded at least to the point
  of preparation and types (like array) for which preparation is not defined.
 -}
-classesByName :: MonadIO m =>
+classesByName :: (MonadIO m, MonadError String m) =>
        String -- ^ className - the class/interface name to search for
     -> VirtualMachine m [J.ReferenceType] {- ^ a list of ReferenceType objects,
                                           each mirroring a type in the target
@@ -526,7 +527,7 @@ data EventRequest = EventRequest
                   | StepRequest J.ThreadReference J.StepSize J.StepDepth
                     deriving (Show, Eq)
 
-enable :: MonadIO m => EventRequest -> VirtualMachine m EventRequest
+enable :: (MonadIO m, MonadError String m) => EventRequest -> VirtualMachine m EventRequest
 enable (EventRequest suspendPolicy Nothing modifiers ClassPrepareRequest) = do
     reply <- runCommand $ J.eventSetRequest J.ClassPrepare suspendPolicy modifiers
     let r = J.dat reply
@@ -556,7 +557,7 @@ isEnabled :: EventRequest -> Bool
 isEnabled (EventRequest _ (Just _) _ _) = True
 isEnabled (EventRequest _ Nothing _ _)  = False
 
-disable :: MonadIO m => EventRequest -> VirtualMachine m EventRequest
+disable :: (MonadIO m, MonadError String m) => EventRequest -> VirtualMachine m EventRequest
 disable (EventRequest
                 suspendPolicy
                 (Just requestId)
@@ -581,7 +582,7 @@ createStepRequest tr ss sd = EventRequest J.SuspendAll Nothing [] (StepRequest t
 genericSignature :: J.ReferenceType -> String
 genericSignature (J.ReferenceType _ _ gs _) = gs
 
-allMethods :: MonadIO m => J.ReferenceType -> VirtualMachine m [Method]
+allMethods :: (MonadIO m, MonadError String m) => J.ReferenceType -> VirtualMachine m [Method]
 allMethods rt@(J.ReferenceType _ refId _ _) = do
     idsizes <- getIdSizes
     reply <- runCommand $ J.methodsCommand refId
@@ -595,7 +596,7 @@ instance Name J.ReferenceType where
 data StackFrame = StackFrame J.ThreadReference J.StackFrame
                   deriving (Eq, Show)
 
-getValue :: MonadIO m => StackFrame -> LocalVariable -> VirtualMachine m J.Value
+getValue :: (MonadIO m, MonadError String m) => StackFrame -> LocalVariable -> VirtualMachine m J.Value
 getValue (StackFrame (J.ThreadReference ti) (J.StackFrame fi _)) (LocalVariable _ _ slot) = do
     reply <- runCommand $ J.getValuesCommand ti fi [slot]
     idsizes <- getIdSizes
@@ -615,8 +616,14 @@ instance Name J.ThreadReference where
 instance Resumable J.ThreadReference where
     resume (J.ThreadReference tId) = resumeThreadId tId
 
-allFrames :: MonadIO m => J.ThreadReference -> VirtualMachine m [StackFrame]
+allFrames :: (MonadIO m, MonadError String m) => J.ThreadReference -> VirtualMachine m [StackFrame]
 allFrames tr = getFrames tr 0 (-1)
+
+frameCount :: (MonadIO m, MonadError String m) => J.ThreadReference -> VirtualMachine m Int
+frameCount tr@(J.ThreadReference tId) = do
+    reply <- runCommand $ J.frameCountCommand tId
+    let count = runGet J.parseInt (J.toLazy $ J.dat reply)
+    return $ fromIntegral count
 
 frames :: (MonadIO m, MonadError String m) =>
           J.ThreadReference -> Int -> Int -> VirtualMachine m [StackFrame]
@@ -626,7 +633,7 @@ frames tr start len = do
     getFrames tr start len
 
 -- This is unsafe implementation of frames command.
-getFrames :: MonadIO m => J.ThreadReference -> Int -> Int -> VirtualMachine m [StackFrame]
+getFrames :: (MonadIO m, MonadError String m) => J.ThreadReference -> Int -> Int -> VirtualMachine m [StackFrame]
 getFrames tr@(J.ThreadReference ti) start len = do
     idsizes <- getIdSizes
     reply <- runCommand $ J.framesCommand ti (fromIntegral start) (fromIntegral len)
@@ -707,17 +714,17 @@ runVersionCommand = do
     p <- liftIO $ J.waitReply h
     return $ runGet J.parseVersion (J.toLazy $ J.dat p)
 
-receiveLineTable :: MonadIO m => Method -> VirtualMachine m J.LineTable
+receiveLineTable :: (MonadIO m, MonadError String m) => Method -> VirtualMachine m J.LineTable
 receiveLineTable (Method (J.ReferenceType _ refId _ _)
                          (J.Method mId _ _ _)) = do
     reply <- runCommand $ J.lineTableCommand refId mId
     let r = J.dat reply
     return $ runGet J.parseLineTableReply (J.toLazy r)
 
-resumeThreadId :: MonadIO m => J.JavaThreadId -> VirtualMachine m ()
+resumeThreadId :: (MonadIO m, MonadError String m) => J.JavaThreadId -> VirtualMachine m ()
 resumeThreadId tId = runCommand (J.resumeThreadCommand tId) >> return ()
 
-locationFromJavaLocation :: MonadIO m =>
+locationFromJavaLocation :: (MonadIO m, MonadError String m) =>
                             J.JavaLocation -> VirtualMachine m Location
 locationFromJavaLocation (J.JavaLocation typeTag refId methodId index) = do
     reply <- runCommand $ J.signatureCommand refId
@@ -752,12 +759,15 @@ signatureToName ('[' : v) = (signatureToName v) ++ "[]"
 
 type SlotComparator = (J.JavaInt -> J.JavaInt -> Bool)
 
-runCommand :: MonadIO m => (J.PacketId -> J.Packet) -> VirtualMachine m J.Packet
+runCommand :: (MonadIO m, MonadError String m) => (J.PacketId -> J.Packet) -> VirtualMachine m J.Packet
 runCommand packet = do
     h <- getVmHandle
     cntr <- yieldPacketIdCounter
     liftIO $ J.sendPacket h $ packet cntr
-    liftIO $ J.waitReply h
+    r <- liftIO $ J.waitReply h
+    let errCode = fromIntegral $ J.errorCode r
+    when (errCode /= 0) $ throwError $ errorFromCode errCode
+    return r
 
 getVariables :: (MonadIO m, MonadError String m) =>
                 Method -> SlotComparator -> VirtualMachine m [LocalVariable]
@@ -773,5 +783,65 @@ getVariables (Method
             return $ map (LocalVariable ref m) slots
     where
         slot (J.Slot _ _ _ _ s) = s
+
+errorList = [ ( 10, "Passed thread is null, is not a valid thread or has exited.")
+            , ( 11, "Thread group invalid.")
+            , ( 12, "Invalid priority.")
+            , ( 13, "If the specified thread has not been suspended by an event.")
+            , ( 14, "Thread already suspended.")
+            , ( 20, "The reference type has been unloaded or garbage collected.")
+            , ( 21, "Invalid class")
+            , ( 22, "Class has been loaded, but not yet prepared.")
+            , ( 23, "Invalid method.")
+            , ( 24, "Invalid location.")
+            , ( 25, "Invalid field.")
+            , ( 30, "Invalid jframeID.")
+            , ( 31, "There are no more Java or JNI frames on the call stack.")
+            , ( 32, "Information about the frame is not available.")
+            , ( 33, "Operation can only be performed on current frame.")
+            , ( 34, "The variable is not an appropriate type for the function used.")
+            , ( 35, "Invalid slot.")
+            , ( 40, "Item already set.")
+            , ( 41, "Desired element not found.")
+            , ( 50, "Invalid monitor.")
+            , ( 51, "This thread doesn't own the monitor.")
+            , ( 52, "The call has been interrupted before completion.")
+            , ( 60, "The call has been interrupted before completion.")
+            , ( 61, "A circularity has been detected while initializing a class.")
+            , ( 62, "The verifier detected that a class file, though well formed, contained some sort of internal inconsistency or security problem.")
+            , ( 63, "Adding methods has not been implemented.")
+            , ( 64, "Schema change has not been implemented.")
+            , ( 65, "The state of the thread has been modified, and is now inconsistent.")
+            , ( 66, "A direct superclass is different for the new class version, or the set of directly implemented interfaces is different and canUnrestrictedlyRedefineClasses is false.")
+            , ( 67, "The new class version does not declare a method declared in the old class version and canUnrestrictedlyRedefineClasses is false.")
+            , ( 68, "A class file has a version number not supported by this VM.")
+            , ( 69, "The class name defined in the new class file is different from the name in the old class object.")
+            , ( 70, "The new class version has different modifiers and and canUnrestrictedlyRedefineClasses is false.")
+            , ( 71, "A method in the new class version has different modifiers than its counterpart in the old class version and and canUnrestrictedlyRedefineClasses is false.")
+            , ( 99, "The functionality is not implemented in this virtual machine.")
+            , (100, "Invalid pointer.")
+            , (101, "Desired information is not available.")
+            , (102, "The specified event type id is not recognized.")
+            , (103, "Illegal argument.")
+            , (110, "The function needed to allocate memory and no more memory was available for allocation.")
+            , (111, "Debugging has not been enabled in this virtual machine. JVMDI cannot be used.")
+            , (112, "The virtual machine is not running.")
+            , (113, "An unexpected internal error has occurred.")
+            , (115, "The thread being used to call this function is not attached to the virtual machine. Calls must be made from attached threads.")
+            , (500, "Invalid object type id or class tag.")
+            , (502, "Previous invoke not complete.")
+            , (503, "Index is invalid.")
+            , (504, "The length is invalid.")
+            , (506, "The string is invalid.")
+            , (507, "The class loader is invalid.")
+            , (508, "The array is invalid.")
+            , (509, "Unable to load the transport.")
+            , (510, "Unable to initialize the transport.")
+            , (511, "Native method.")
+            , (512, "The count is invalid.")
+            ]
+
+errorFromCode :: Int -> String
+errorFromCode n = snd $ head $ filter ((n ==) . fst) errorList
 
 -- vim: foldmethod=marker foldmarker={{{,}}}
