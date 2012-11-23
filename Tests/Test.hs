@@ -10,12 +10,10 @@ import Control.Monad.Error (MonadError(..), runErrorT, ErrorT)
 import Data.List
 
 main = do
-    result <- runErrorT $ runVirtualMachine "localhost" (PortNumber 2044) body
-    case result of
-            Right _ -> putStrLn "Execution ok"
-            Left e  -> putStrLn $ "Error: " ++ e
+    result <- runVirtualMachine "localhost" (PortNumber 2044) body
+    putStrLn "Execution ok"
 
-body :: VirtualMachine (ErrorT String IO) ()
+body :: VirtualMachine IO ()
 body = do
         jdv <- version
         liftIO . putStrLn $ "JdwpVersion: " ++ (show jdv)
@@ -55,17 +53,23 @@ body = do
         let isAnotherMethod = (liftM ("anotherMethod" ==)) . name
         anotherMethod <- head <$> (filterM isAnotherMethod methods)
         liftIO . putStrLn $ "Variables of method anotherMethod: " ++ (show anotherMethod)
-        (arguments anotherMethod >>= \l -> liftIO $ putStrLn $ show l)
-            `catchError`
+        do
+            l <- arguments anotherMethod
+            liftIO $ putStrLn $ show l
+         `catchError`
                 (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
         liftIO . putStrLn $ "Variables of method main: " ++ (show methodMain)
-        (variables methodMain >>= \l -> liftIO $ putStrLn $ show l)
-            `catchError`
+        do
+            l <- variables methodMain
+            liftIO $ putStrLn $ show l
+         `catchError`
                 (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
 
         liftIO . putStrLn $ "VariablesByName"
-        (variablesByName methodMain "i" >>= \l -> liftIO $ putStrLn $ show l)
-            `catchError`
+        do
+            l <- variablesByName methodMain "i"
+            liftIO $ putStrLn $ show l
+         `catchError`
                 (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
         liftIO . putStrLn $ "Arguments of the method main"
         (arguments methodMain >>= \l -> liftIO $ putStrLn $ show l)
@@ -102,8 +106,11 @@ body = do
         let e0 = head $ events es0
         liftIO $ putStrLn $ show e0
 
-        v0 <- getValueOfI $ thread e0
-        liftIO $ putStrLn $ show v0
+        do
+            v0 <- getValueOfI $ thread e0
+            liftIO $ putStrLn $ show v0
+         `catchError`
+            (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
 
         resumeVm
         void $ removeEvent
@@ -112,8 +119,11 @@ body = do
         let e1 = head $ events es1
         liftIO $ putStrLn $ show e1
 
-        v1 <- getValueOfI $ thread e1
-        liftIO $ putStrLn $ show v1
+        do
+            v1 <- getValueOfI $ thread e1
+            liftIO $ putStrLn $ show v1
+         `catchError`
+            (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
 
         pollEvents $ \e -> case eventKind e of
             VmDeath -> True
@@ -132,6 +142,7 @@ getValueOfI curThread = do
     var <- head <$> variablesByName (method loc) "i"
     liftIO $ putStrLn $ show var
     getValue fr var
+
 
 pollEvents stopFunction = do
     resumeVm

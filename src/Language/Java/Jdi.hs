@@ -182,18 +182,18 @@ setCapabilities c = do
     s <- get
     put $ s { capabilities = (Just c) }
 
-handshake :: (MonadIO m, MonadError String m) => Handle -> VirtualMachine m ()
+handshake :: (Error e, MonadIO m, MonadError e m) => Handle -> VirtualMachine m ()
 handshake h = do
     liftIO $ hPutStr h "JDWP-Handshake"
     liftIO $ hFlush h
     value <- liftIO $ B.hGet h 14
-    when (value /= (B8.pack "JDWP-Handshake")) $ throwError "Handshake failed"
+    when (value /= (B8.pack "JDWP-Handshake")) $ throwError $ strMsg "Handshake failed"
 -- }}}
 
 {- | Executes source code which communicates with virtual machine.
  Source code is executed for Vm running on the defined host and port.
  -}
-runVirtualMachine :: (MonadIO m, MonadError String m) =>
+runVirtualMachine :: (Error e, MonadIO m, MonadError e m) =>
        String -- ^ Host address.
     -> PortID -- ^ Port.
     -> VirtualMachine m () -- ^ Monad to run.
@@ -251,19 +251,19 @@ initialVmState h = VmState Nothing 0 h S.empty Nothing Nothing
 -- {{{
 
 class Name a where
-    name :: (MonadIO m, MonadError String m) => a -> VirtualMachine m String
+    name :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m String
 
 class Resumable a where
-    resume :: (MonadIO m, MonadError String m) => a -> VirtualMachine m ()
+    resume :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m ()
 
 class Locatable a where
-    location :: (MonadIO m, MonadError String m) => a -> VirtualMachine m Location
+    location :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m Location
 
 class SourceName a where
-    sourceName :: (MonadIO m, MonadError String m) => a -> VirtualMachine m String
+    sourceName :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m String
 
 class AllLineLocations a where
-    allLineLocations :: (MonadIO m, MonadError String m) => a -> VirtualMachine m [Location]
+    allLineLocations :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m [Location]
 
 -- }}}
 
@@ -380,7 +380,7 @@ canUnrestrictedlyRedefineClasses =
  The returned list will include reference types loaded at least to the point
  of preparation and types (like array) for which preparation is not defined.
 -}
-classesByName :: (MonadIO m, MonadError String m) =>
+classesByName :: (Error e, MonadIO m, MonadError e m) =>
        String -- ^ className - the class/interface name to search for
     -> VirtualMachine m [J.ReferenceType] {- ^ a list of ReferenceType objects,
                                           each mirroring a type in the target
@@ -527,7 +527,7 @@ data EventRequest = EventRequest
                   | StepRequest J.ThreadReference J.StepSize J.StepDepth
                     deriving (Show, Eq)
 
-enable :: (MonadIO m, MonadError String m) => EventRequest -> VirtualMachine m EventRequest
+enable :: (Error e, MonadIO m, MonadError e m) => EventRequest -> VirtualMachine m EventRequest
 enable (EventRequest suspendPolicy Nothing modifiers ClassPrepareRequest) = do
     reply <- runCommand $ J.eventSetRequest J.ClassPrepare suspendPolicy modifiers
     let r = J.dat reply
@@ -557,7 +557,7 @@ isEnabled :: EventRequest -> Bool
 isEnabled (EventRequest _ (Just _) _ _) = True
 isEnabled (EventRequest _ Nothing _ _)  = False
 
-disable :: (MonadIO m, MonadError String m) => EventRequest -> VirtualMachine m EventRequest
+disable :: (Error e, MonadIO m, MonadError e m) => EventRequest -> VirtualMachine m EventRequest
 disable (EventRequest
                 suspendPolicy
                 (Just requestId)
@@ -582,7 +582,7 @@ createStepRequest tr ss sd = EventRequest J.SuspendAll Nothing [] (StepRequest t
 genericSignature :: J.ReferenceType -> String
 genericSignature (J.ReferenceType _ _ gs _) = gs
 
-allMethods :: (MonadIO m, MonadError String m) => J.ReferenceType -> VirtualMachine m [Method]
+allMethods :: (Error e, MonadIO m, MonadError e m) => J.ReferenceType -> VirtualMachine m [Method]
 allMethods rt@(J.ReferenceType _ refId _ _) = do
     idsizes <- getIdSizes
     reply <- runCommand $ J.methodsCommand refId
@@ -596,7 +596,7 @@ instance Name J.ReferenceType where
 data StackFrame = StackFrame J.ThreadReference J.StackFrame
                   deriving (Eq, Show)
 
-getValue :: (MonadIO m, MonadError String m) => StackFrame -> LocalVariable -> VirtualMachine m J.Value
+getValue :: (Error e, MonadIO m, MonadError e m) => StackFrame -> LocalVariable -> VirtualMachine m J.Value
 getValue (StackFrame (J.ThreadReference ti) (J.StackFrame fi _)) (LocalVariable _ _ slot) = do
     reply <- runCommand $ J.getValuesCommand ti fi [slot]
     idsizes <- getIdSizes
@@ -616,24 +616,24 @@ instance Name J.ThreadReference where
 instance Resumable J.ThreadReference where
     resume (J.ThreadReference tId) = resumeThreadId tId
 
-allFrames :: (MonadIO m, MonadError String m) => J.ThreadReference -> VirtualMachine m [StackFrame]
+allFrames :: (Error e, MonadIO m, MonadError e m) => J.ThreadReference -> VirtualMachine m [StackFrame]
 allFrames tr = getFrames tr 0 (-1)
 
-frameCount :: (MonadIO m, MonadError String m) => J.ThreadReference -> VirtualMachine m Int
+frameCount :: (Error e, MonadIO m, MonadError e m) => J.ThreadReference -> VirtualMachine m Int
 frameCount tr@(J.ThreadReference tId) = do
     reply <- runCommand $ J.frameCountCommand tId
     let count = runGet J.parseInt (J.toLazy $ J.dat reply)
     return $ fromIntegral count
 
-frames :: (MonadIO m, MonadError String m) =>
+frames :: (Error e, MonadIO m, MonadError e m) =>
           J.ThreadReference -> Int -> Int -> VirtualMachine m [StackFrame]
 frames tr start len = do
-    when (start < 0) $ throwError "negative start"
-    when (len < 0) $ throwError "negative len"
+    when (start < 0) $ throwError $ strMsg "negative start"
+    when (len < 0) $ throwError $ strMsg "negative len"
     getFrames tr start len
 
 -- This is unsafe implementation of frames command.
-getFrames :: (MonadIO m, MonadError String m) => J.ThreadReference -> Int -> Int -> VirtualMachine m [StackFrame]
+getFrames :: (Error e, MonadIO m, MonadError e m) => J.ThreadReference -> Int -> Int -> VirtualMachine m [StackFrame]
 getFrames tr@(J.ThreadReference ti) start len = do
     idsizes <- getIdSizes
     reply <- runCommand $ J.framesCommand ti (fromIntegral start) (fromIntegral len)
@@ -656,15 +656,15 @@ instance Locatable Method where
         (J.LineTable _ _ lines) <- receiveLineTable m
         return $ Location ref method (head lines)
 
-arguments :: (MonadIO m, MonadError String m) =>
+arguments :: (Error e, MonadIO m, MonadError e m) =>
              Method -> VirtualMachine m [LocalVariable]
 arguments method = getVariables method (>)
 
-variables :: (MonadIO m, MonadError String m) =>
+variables :: (Error e, MonadIO m, MonadError e m) =>
              Method -> VirtualMachine m [LocalVariable]
 variables method = getVariables method (<=)
 
-variablesByName :: (MonadIO m, MonadError String m) =>
+variablesByName :: (Error e, MonadIO m, MonadError e m) =>
                    Method -> String -> VirtualMachine m [LocalVariable]
 variablesByName method varName =
     variables method >>= filterM (((varName ==) `liftM`) . name)
@@ -714,17 +714,17 @@ runVersionCommand = do
     p <- liftIO $ J.waitReply h
     return $ runGet J.parseVersion (J.toLazy $ J.dat p)
 
-receiveLineTable :: (MonadIO m, MonadError String m) => Method -> VirtualMachine m J.LineTable
+receiveLineTable :: (Error e, MonadIO m, MonadError e m) => Method -> VirtualMachine m J.LineTable
 receiveLineTable (Method (J.ReferenceType _ refId _ _)
                          (J.Method mId _ _ _)) = do
     reply <- runCommand $ J.lineTableCommand refId mId
     let r = J.dat reply
     return $ runGet J.parseLineTableReply (J.toLazy r)
 
-resumeThreadId :: (MonadIO m, MonadError String m) => J.JavaThreadId -> VirtualMachine m ()
+resumeThreadId :: (Error e, MonadIO m, MonadError e m) => J.JavaThreadId -> VirtualMachine m ()
 resumeThreadId tId = runCommand (J.resumeThreadCommand tId) >> return ()
 
-locationFromJavaLocation :: (MonadIO m, MonadError String m) =>
+locationFromJavaLocation :: (Error e, MonadIO m, MonadError e m) =>
                             J.JavaLocation -> VirtualMachine m Location
 locationFromJavaLocation (J.JavaLocation typeTag refId methodId index) = do
     reply <- runCommand $ J.signatureCommand refId
@@ -759,24 +759,25 @@ signatureToName ('[' : v) = (signatureToName v) ++ "[]"
 
 type SlotComparator = (J.JavaInt -> J.JavaInt -> Bool)
 
-runCommand :: (MonadIO m, MonadError String m) => (J.PacketId -> J.Packet) -> VirtualMachine m J.Packet
+runCommand :: (Error e, MonadIO m, MonadError e m) =>
+              (J.PacketId -> J.Packet) -> VirtualMachine m J.Packet
 runCommand packet = do
     h <- getVmHandle
     cntr <- yieldPacketIdCounter
     liftIO $ J.sendPacket h $ packet cntr
     r <- liftIO $ J.waitReply h
     let errCode = fromIntegral $ J.errorCode r
-    when (errCode /= 0) $ throwError $ errorFromCode errCode
+    when (errCode /= 0) $ throwError $ strMsg $ errorFromCode errCode
     return r
 
-getVariables :: (MonadIO m, MonadError String m) =>
+getVariables :: (Error e, MonadIO m, MonadError e m) =>
                 Method -> SlotComparator -> VirtualMachine m [LocalVariable]
 getVariables (Method
             ref@(J.ReferenceType _ refId _ _)
             m@(J.Method mId _ _ _)) comparator = do
     reply <- runCommand $ J.variableTableCommand refId mId
     if (J.errorCode reply) /= 0
-        then throwError "Information about variables is absent"
+        then throwError $ strMsg "Information about variables is absent"
         else do
             let (J.VariableTable argCount varList) = runGet J.parseVariableTableReply (J.toLazy $ J.dat reply)
             let slots = filter ((argCount `comparator`) . slot) varList
