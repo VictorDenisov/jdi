@@ -724,16 +724,21 @@ receiveLineTable (Method (J.ReferenceType _ refId _ _)
 resumeThreadId :: (Error e, MonadIO m, MonadError e m) => J.JavaThreadId -> VirtualMachine m ()
 resumeThreadId tId = runCommand (J.resumeThreadCommand tId) >> return ()
 
-locationFromJavaLocation :: (Error e, MonadIO m, MonadError e m) =>
-                            J.JavaLocation -> VirtualMachine m Location
-locationFromJavaLocation (J.JavaLocation typeTag refId methodId index) = do
+referenceTypeFromRefId :: (Error e, MonadIO m, MonadError e m) =>
+                          J.TypeTag -> J.JavaClassId -> VirtualMachine m J.ReferenceType
+referenceTypeFromRefId typeTag refId = do
     reply <- runCommand $ J.signatureCommand refId
     let csr = J.dat reply
     let classSignature = runGet J.parseString (J.toLazy csr)
     reply' <- runCommand $ J.statusCommand refId
     let str = J.dat reply'
     let status = runGet J.parseClassStatus (J.toLazy str)
-    let rt = J.ReferenceType typeTag refId classSignature status
+    return $ J.ReferenceType typeTag refId classSignature status
+
+locationFromJavaLocation :: (Error e, MonadIO m, MonadError e m) =>
+                            J.JavaLocation -> VirtualMachine m Location
+locationFromJavaLocation (J.JavaLocation typeTag refId methodId index) = do
+    rt <- referenceTypeFromRefId typeTag refId
     methodList <- allMethods rt
     let (Just method) = find isMyMethod methodList
     al <- allLineLocations method
