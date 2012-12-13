@@ -1020,6 +1020,15 @@ frameCountCommand threadId@(JavaObjectId s _) packetId =
         packetId 0 11 7
         (toStrict $ runPut $ putThreadId threadId)
 
+lengthCommand :: JavaObjectId -> PacketId -> Packet
+lengthCommand
+            arrayId@(JavaObjectId st _)
+            packetId =
+    CommandPacket
+        (11 + st)
+        packetId 0 13 1
+        (toStrict $ runPut $ putObjectId arrayId)
+
 getValuesCommand :: JavaThreadId -> JavaFrameId -> [Slot] -> PacketId -> Packet
 getValuesCommand
             threadId@(JavaObjectId st _)
