@@ -43,6 +43,15 @@ module Language.Java.Jdi
 , J.ReferenceType
 , genericSignature
 , allMethods
+, J.ArrayReference
+, J.Value
+, valueType
+, byteValue
+, booleanValue
+, charValue
+, integerValue
+, longValue
+, ValueType(..)
 , StackFrame
 , getValue
 , J.ThreadReference
@@ -592,6 +601,72 @@ allMethods rt@(J.ReferenceType _ refId _ _) = do
 
 instance Name J.ReferenceType where
     name = return . signatureToName . genericSignature
+
+valueType :: J.Value -> ValueType
+valueType J.ArrayValue {}       = ArrayValue
+valueType J.ByteValue {}        = ByteValue
+valueType J.CharValue {}        = CharValue
+valueType J.ObjectValue {}      = ObjectValue
+valueType J.FloatValue {}       = FloatValue
+valueType J.DoubleValue {}      = DoubleValue
+valueType J.IntValue {}         = IntValue
+valueType J.LongValue {}        = LongValue
+valueType J.ShortValue {}       = ShortValue
+valueType J.VoidValue {}        = VoidValue
+valueType J.BooleanValue {}     = BooleanValue
+valueType J.StringValue {}      = StringValue
+valueType J.ThreadValue {}      = ThreadValue
+valueType J.ThreadGroupValue {} = ThreadGroupValue
+valueType J.ClassLoaderValue {} = ClassLoaderValue
+valueType J.ClassObjectValue {} = ClassObjectValue
+
+booleanValue :: (Monad m, Error e, MonadError e m) =>
+                J.Value -> m Bool
+booleanValue (J.BooleanValue v) = return $ v /= 0
+booleanValue _ = throwError $ strMsg "not boolean value"
+
+byteValue :: (Monad m, Error e, MonadError e m) =>
+                J.Value -> m Int
+byteValue (J.ByteValue v) = return $ fromIntegral v
+byteValue _ = throwError $ strMsg "not byte value"
+
+charValue :: (Monad m, Error e, MonadError e m) =>
+                J.Value -> m Char
+charValue (J.CharValue v) = return $ toEnum $ fromIntegral v
+charValue _ = throwError $ strMsg "not char value"
+
+integerValue :: (Monad m, Error e, MonadError e m) =>
+                J.Value -> m Int
+integerValue (J.IntValue v) = return $ fromIntegral v
+integerValue _ = throwError $ strMsg "not integer value"
+
+longValue :: (Monad m, Error e, MonadError e m) =>
+                J.Value -> m Int
+longValue (J.LongValue v) = return $ fromIntegral v
+longValue _ = throwError $ strMsg "not long value"
+
+arrayValue :: (Monad m, Error e, MonadError e m) =>
+              J.Value -> m J.ArrayReference
+arrayValue (J.ArrayValue objectId) = return $ J.ArrayReference objectId
+arrayValue _ = throwError $ strMsg "not array value"
+
+data ValueType = ArrayValue
+               | ByteValue
+               | CharValue
+               | ObjectValue
+               | FloatValue
+               | DoubleValue
+               | IntValue
+               | LongValue
+               | ShortValue
+               | VoidValue
+               | BooleanValue
+               | StringValue
+               | ThreadValue
+               | ThreadGroupValue
+               | ClassLoaderValue
+               | ClassObjectValue
+                 deriving (Eq, Show)
 
 data StackFrame = StackFrame J.ThreadReference J.StackFrame
                   deriving (Eq, Show)

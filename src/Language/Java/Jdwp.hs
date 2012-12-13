@@ -1,6 +1,7 @@
 module Language.Java.Jdwp where
 
 import Data.Word (Word8, Word16, Word32, Word64)
+import Data.Int (Int8, Int16, Int32, Int64)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.ByteString.Lazy as LB
@@ -14,7 +15,8 @@ import Control.Applicative ((<$>), (<*>))
 import Data.Binary.Get (runGet, getByteString)
 import Data.Binary.Put (runPut)
 import Control.Monad.Trans (liftIO, lift)
-import GHC.IO.Handle (Handle, hClose, hSetBinaryMode, hPutStr, hFlush, hWaitForInput)
+import GHC.IO.Handle ( Handle , hClose, hSetBinaryMode
+                     , hPutStr, hFlush, hWaitForInput )
 import Control.Monad (guard, when)
 import Control.Monad.Error (ErrorT, runErrorT)
 import Control.Monad.IO.Class (MonadIO)
@@ -85,7 +87,8 @@ type JavaClassId         = JavaReferenceTypeId
 data JavaFieldId         = JavaFieldId JavaInt Word64 deriving (Show, Eq)
 data JavaMethodId        = JavaMethodId JavaInt Word64 deriving (Show, Eq)
 data JavaObjectId        = JavaObjectId JavaInt Word64 deriving (Show, Eq)
-data JavaReferenceTypeId = JavaReferenceTypeId JavaInt Word64 deriving (Show, Eq) -- size value
+data JavaReferenceTypeId = JavaReferenceTypeId JavaInt Word64 -- size value
+                           deriving (Show, Eq)
 data JavaFrameId         = JavaFrameId JavaInt Word64 deriving (Show, Eq)
 
 data JavaLocation = JavaLocation
@@ -394,10 +397,18 @@ data Tag = ArrayTag
 newtype ClassStatus = ClassStatus JavaInt
                       deriving (Eq, Show)
 
-data ReferenceType = ReferenceType TypeTag JavaReferenceTypeId JavaString ClassStatus
+data ReferenceType = ReferenceType
+                            TypeTag
+                            JavaReferenceTypeId
+                            JavaString
+                            ClassStatus
                      deriving (Eq, Show)
 
-data Method = Method JavaMethodId String String JavaInt -- methodId name signature modBits
+data ArrayReference = ArrayReference JavaObjectId
+                      deriving (Eq, Show)
+
+                    -- methodId name signature modBits
+data Method = Method JavaMethodId String String JavaInt
               deriving (Eq, Show)
 
 data ThreadReference = ThreadReference JavaThreadId
@@ -432,14 +443,14 @@ data StackFrame = StackFrame JavaFrameId JavaLocation
                   deriving (Eq, Show)
 
 data Value = ArrayValue JavaObjectId
-           | ByteValue Word8
+           | ByteValue Int8
            | CharValue Word16
            | ObjectValue JavaObjectId
-           | FloatValue Word32
-           | DoubleValue Word64
-           | IntValue Word32
-           | LongValue Word64
-           | ShortValue Word16
+           | FloatValue Float
+           | DoubleValue Double
+           | IntValue Int32
+           | LongValue Int64
+           | ShortValue Int16
            | VoidValue
            | BooleanValue Word8
            | StringValue JavaObjectId
@@ -818,14 +829,14 @@ parseValue idsizes = do
     tg <- parseTag
     case tg of
         ArrayTag -> ArrayValue <$> parseObjectId (objectIdSize idsizes)
-        ByteTag -> ByteValue <$> (get :: Get Word8)
+        ByteTag -> ByteValue <$> (get :: Get Int8)
         CharTag -> CharValue <$> (get :: Get Word16)
         ObjectTag -> ObjectValue <$> parseObjectId (objectIdSize idsizes)
-        FloatTag -> FloatValue <$> (get :: Get Word32)
-        DoubleTag -> DoubleValue <$> (get :: Get Word64)
-        IntTag -> IntValue <$> (get :: Get Word32)
-        LongTag -> LongValue <$> (get :: Get Word64)
-        ShortTag -> ShortValue <$> (get :: Get Word16)
+        FloatTag -> FloatValue <$> (get :: Get Float)
+        DoubleTag -> DoubleValue <$> (get :: Get Double)
+        IntTag -> IntValue <$> (get :: Get Int32)
+        LongTag -> LongValue <$> (get :: Get Int64)
+        ShortTag -> ShortValue <$> (get :: Get Int16)
         VoidTag -> return VoidValue
         BooleanTag -> BooleanValue <$> (get :: Get Word8)
         StringTag -> StringValue <$> parseObjectId (objectIdSize idsizes)
