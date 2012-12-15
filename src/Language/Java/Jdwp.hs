@@ -560,6 +560,18 @@ tagNumbers = [ (91 , ArrayTag)
              , (99 , ClassObjectTag)
              ]
 
+primitiveTag :: Tag -> Bool
+primitiveTag tg = case tg of
+                    ByteTag -> True
+                    BooleanTag -> True
+                    CharTag -> True
+                    DoubleTag -> True
+                    FloatTag -> True
+                    IntTag -> True
+                    LongTag -> True
+                    ShortTag -> True
+                    otherwise -> False
+
 errorList = [ ( 10, "Passed thread is null, is not a valid thread or has exited.")
             , ( 11, "Thread group invalid.")
             , ( 12, "Invalid priority.")
@@ -822,11 +834,15 @@ parseSlot = Slot
 parseGetValuesReply :: IdSizes -> Get [Value]
 parseGetValuesReply idsizes = do
     valuesCount <- parseInt
-    mapM (\_ -> parseValue idsizes) [1..valuesCount]
+    mapM (\_ -> parseTaggedValue idsizes) [1..valuesCount]
 
-parseValue :: IdSizes -> Get Value
-parseValue idsizes = do
+parseTaggedValue :: IdSizes -> Get Value
+parseTaggedValue idsizes = do
     tg <- parseTag
+    parseUntaggedValue idsizes tg
+
+parseUntaggedValue :: IdSizes -> Tag -> Get Value
+parseUntaggedValue idsizes tg =
     case tg of
         ArrayTag -> ArrayValue <$> parseObjectId (objectIdSize idsizes)
         ByteTag -> ByteValue <$> (get :: Get Int8)
@@ -844,6 +860,16 @@ parseValue idsizes = do
         ThreadGroupTag -> ThreadGroupValue <$> parseObjectId (objectIdSize idsizes)
         ClassLoaderTag -> ClassLoaderValue <$> parseObjectId (objectIdSize idsizes)
         ClassObjectTag -> ClassObjectValue <$> parseObjectId (objectIdSize idsizes)
+
+parseArrayRegion :: IdSizes -> Get [Value]
+parseArrayRegion idsizes = do
+    tg <- parseTag
+    valuesCount <- parseInt
+    if primitiveTag tg
+        then
+            mapM (\_ -> parseUntaggedValue idsizes tg) [1..valuesCount]
+        else
+            mapM (\_ -> parseTaggedValue idsizes) [1..valuesCount]
 
 putEventRequest :: EventKind -> SuspendPolicy -> [EventModifier] -> Put
 putEventRequest ek sp ems = do
@@ -1028,6 +1054,20 @@ lengthCommand
         (11 + st)
         packetId 0 13 1
         (toStrict $ runPut $ putObjectId arrayId)
+
+getArrayValuesCommand :: JavaObjectId
+                      -> JavaInt
+                      -> JavaInt
+                      -> PacketId
+                      -> Packet
+getArrayValuesCommand arrayId@(JavaObjectId st _) firstIndex length packetId =
+    CommandPacket
+        (11 + st + 4 + 4)
+        packetId 0 13 2
+        (toStrict $ runPut $ do
+                            putObjectId arrayId
+                            putInt firstIndex
+                            putInt length)
 
 getValuesCommand :: JavaThreadId -> JavaFrameId -> [Slot] -> PacketId -> Packet
 getValuesCommand
