@@ -407,6 +407,9 @@ data ReferenceType = ReferenceType
 data ArrayReference = ArrayReference JavaObjectId
                       deriving (Eq, Show)
 
+data StringReference = StringReference JavaObjectId
+                      deriving (Eq, Show)
+
                     -- methodId name signature modBits
 data Method = Method JavaMethodId String String JavaInt
               deriving (Eq, Show)
@@ -1021,6 +1024,13 @@ statusCommand typeId@(JavaReferenceTypeId rSize _) packetId =
         (11 + rSize)
         packetId 0 2 9
         (toStrict $ runPut $ putReferenceTypeId typeId)
+
+stringValueCommand :: JavaObjectId -> PacketId -> Packet
+stringValueCommand sId@(JavaObjectId s _) packetId =
+    CommandPacket
+        (11 + s)
+        packetId 0 10 1
+        (toStrict $ runPut $ putObjectId sId)
 
 threadReferenceNameCommand :: JavaThreadId -> PacketId -> Packet
 threadReferenceNameCommand ti@(JavaObjectId size _) packetId =

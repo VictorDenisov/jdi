@@ -44,6 +44,8 @@ module Language.Java.Jdi
 , genericSignature
 , allMethods
 , J.ArrayReference
+, J.StringReference
+, toStringValue
 , J.Value
 , getArrValue
 , valueType
@@ -53,6 +55,7 @@ module Language.Java.Jdi
 , integerValue
 , longValue
 , arrayValue
+, stringValue
 , ValueType(..)
 , StackFrame
 , getValue
@@ -604,6 +607,12 @@ allMethods rt@(J.ReferenceType _ refId _ _) = do
 instance Name J.ReferenceType where
     name = return . signatureToName . genericSignature
 
+toStringValue :: (Error e, MonadIO m, MonadError e m) =>
+                 J.StringReference -> VirtualMachine m String
+toStringValue sr@(J.StringReference sid) = do
+    reply <- runCommand $ J.stringValueCommand sid
+    return $ runGet J.parseString (J.toLazy $ J.dat reply)
+
 getArrValue:: (Error e, MonadIO m, MonadError e m) =>
                J.ArrayReference -> Int -> VirtualMachine m J.Value
 getArrValue arrRef@(J.ArrayReference objId) index = do
@@ -660,6 +669,11 @@ arrayValue :: (Monad m, Error e, MonadError e m) =>
               J.Value -> m J.ArrayReference
 arrayValue (J.ArrayValue objectId) = return $ J.ArrayReference objectId
 arrayValue _ = throwError $ strMsg "not array value"
+
+stringValue :: (MonadIO m, Error e, MonadError e m) =>
+               J.Value -> VirtualMachine m J.StringReference
+stringValue (J.StringValue objectId) = return $ J.StringReference objectId
+stringValue _ = throwError $ strMsg "not string value"
 
 data ValueType = ArrayValue
                | ByteValue

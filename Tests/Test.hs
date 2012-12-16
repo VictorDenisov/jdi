@@ -104,7 +104,9 @@ body = do
         ArrayValue -> do
             arrV <- arrayValue mainArgsValue
             aV <- getArrValue arrV 0
-            liftIO $ putStrLn $ show aV
+            sV <- stringValue aV
+            sss <- toStringValue sV
+            liftIO $ putStrLn sss
         otherwise  -> liftIO $ putStrLn "Not array value"
 
 
