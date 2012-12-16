@@ -72,8 +72,10 @@ body = do
      `catchError`
             (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
     liftIO . putStrLn $ "Arguments of the method main"
-    (arguments methodMain >>= \l -> liftIO $ putStrLn $ show l)
-        `catchError`
+    do
+        mainArgs <- arguments methodMain
+        liftIO $ putStrLn $ show mainArgs
+     `catchError`
             (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
     liftIO . putStrLn $ "Printing line table"
     lineTable <- allLineLocations methodMain
@@ -92,6 +94,20 @@ body = do
     liftIO . putStrLn $ show methodMain
     loc <- location ev
     liftIO . putStrLn $ show loc
+    liftIO . putStrLn $ "Values of args"
+
+    let curThread = thread ev
+    fr <- head <$> allFrames curThread
+    mainArgs <- arguments methodMain
+    mainArgsValue <- getValue fr (head mainArgs)
+    case valueType mainArgsValue of
+        ArrayValue -> do
+            arrV <- arrayValue mainArgsValue
+            aV <- getArrValue arrV 0
+            liftIO $ putStrLn $ show aV
+        otherwise  -> liftIO $ putStrLn "Not array value"
+
+
     spr <- enable $ (createStepRequest (thread ev) StepLine StepOver)
     resumeVm
     void $ removeEvent

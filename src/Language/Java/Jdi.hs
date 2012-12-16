@@ -45,12 +45,14 @@ module Language.Java.Jdi
 , allMethods
 , J.ArrayReference
 , J.Value
+, getArrValue
 , valueType
 , byteValue
 , booleanValue
 , charValue
 , integerValue
 , longValue
+, arrayValue
 , ValueType(..)
 , StackFrame
 , getValue
