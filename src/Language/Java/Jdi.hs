@@ -602,6 +602,15 @@ allMethods rt@(J.ReferenceType _ refId _ _) = do
 instance Name J.ReferenceType where
     name = return . signatureToName . genericSignature
 
+getArrValue:: (Error e, MonadIO m, MonadError e m) =>
+               J.ArrayReference -> Int -> VirtualMachine m J.Value
+getArrValue arrRef@(J.ArrayReference objId) index = do
+    idsizes <- getIdSizes
+    reply <- runCommand $ J.getArrayValuesCommand objId (fromIntegral index) 1
+    let r = J.dat reply
+    let values = runGet (J.parseArrayRegion idsizes) (J.toLazy r)
+    return $ head values
+
 valueType :: J.Value -> ValueType
 valueType J.ArrayValue {}       = ArrayValue
 valueType J.ByteValue {}        = ByteValue
@@ -671,11 +680,15 @@ data ValueType = ArrayValue
 data StackFrame = StackFrame J.ThreadReference J.StackFrame
                   deriving (Eq, Show)
 
-getValue :: (Error e, MonadIO m, MonadError e m) => StackFrame -> LocalVariable -> VirtualMachine m J.Value
-getValue (StackFrame (J.ThreadReference ti) (J.StackFrame fi _)) (LocalVariable _ _ slot) = do
+getValue :: (Error e, MonadIO m, MonadError e m) =>
+            StackFrame -> LocalVariable -> VirtualMachine m J.Value
+getValue (StackFrame (J.ThreadReference ti) (J.StackFrame fi _))
+         (LocalVariable _ _ slot) = do
     reply <- runCommand $ J.getValuesCommand ti fi [slot]
     idsizes <- getIdSizes
-    return $ head $ runGet (J.parseGetValuesReply idsizes) (J.toLazy $ J.dat reply)
+    return $ head $ runGet
+                        (J.parseGetValuesReply idsizes)
+                        (J.toLazy $ J.dat reply)
 
 instance Locatable StackFrame where
     location (StackFrame _ (J.StackFrame _ javaLoc))
