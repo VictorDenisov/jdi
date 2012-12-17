@@ -45,18 +45,9 @@ module Language.Java.Jdi
 , allMethods
 , J.ArrayReference
 , J.StringReference
-, toStringValue
-, J.Value
-, getArrValue
-, valueType
-, byteValue
-, booleanValue
-, charValue
-, integerValue
-, longValue
-, arrayValue
 , stringValue
-, ValueType(..)
+, getArrValue
+, Value(..)
 , StackFrame
 , getValue
 , J.ThreadReference
@@ -607,102 +598,68 @@ allMethods rt@(J.ReferenceType _ refId _ _) = do
 instance Name J.ReferenceType where
     name = return . signatureToName . genericSignature
 
-toStringValue :: (Error e, MonadIO m, MonadError e m) =>
+stringValue :: (Error e, MonadIO m, MonadError e m) =>
                  J.StringReference -> VirtualMachine m String
-toStringValue sr@(J.StringReference sid) = do
+stringValue sr@(J.StringReference sid) = do
     reply <- runCommand $ J.stringValueCommand sid
     return $ runGet J.parseString (J.toLazy $ J.dat reply)
 
 getArrValue:: (Error e, MonadIO m, MonadError e m) =>
-               J.ArrayReference -> Int -> VirtualMachine m J.Value
+               J.ArrayReference -> Int -> VirtualMachine m Value
 getArrValue arrRef@(J.ArrayReference objId) index = do
     idsizes <- getIdSizes
     reply <- runCommand $ J.getArrayValuesCommand objId (fromIntegral index) 1
     let r = J.dat reply
     let values = runGet (J.parseArrayRegion idsizes) (J.toLazy r)
-    return $ head values
+    toJdiValue $ head values
 
-valueType :: J.Value -> ValueType
-valueType J.ArrayValue {}       = ArrayValue
-valueType J.ByteValue {}        = ByteValue
-valueType J.CharValue {}        = CharValue
-valueType J.ObjectValue {}      = ObjectValue
-valueType J.FloatValue {}       = FloatValue
-valueType J.DoubleValue {}      = DoubleValue
-valueType J.IntValue {}         = IntValue
-valueType J.LongValue {}        = LongValue
-valueType J.ShortValue {}       = ShortValue
-valueType J.VoidValue {}        = VoidValue
-valueType J.BooleanValue {}     = BooleanValue
-valueType J.StringValue {}      = StringValue
-valueType J.ThreadValue {}      = ThreadValue
-valueType J.ThreadGroupValue {} = ThreadGroupValue
-valueType J.ClassLoaderValue {} = ClassLoaderValue
-valueType J.ClassObjectValue {} = ClassObjectValue
+toJdiValue :: (Monad m, Error e, MonadError e m) =>
+              (J.Value -> m Value)
+toJdiValue (J.BooleanValue v) = return (BooleanValue $ v /= 0)
 
-booleanValue :: (Monad m, Error e, MonadError e m) =>
-                J.Value -> m Bool
-booleanValue (J.BooleanValue v) = return $ v /= 0
-booleanValue _ = throwError $ strMsg "not boolean value"
+toJdiValue (J.ByteValue v) = return (ByteValue $ fromIntegral v)
 
-byteValue :: (Monad m, Error e, MonadError e m) =>
-                J.Value -> m Int
-byteValue (J.ByteValue v) = return $ fromIntegral v
-byteValue _ = throwError $ strMsg "not byte value"
+toJdiValue (J.CharValue v) = return (CharValue $ toEnum $ fromIntegral v)
 
-charValue :: (Monad m, Error e, MonadError e m) =>
-                J.Value -> m Char
-charValue (J.CharValue v) = return $ toEnum $ fromIntegral v
-charValue _ = throwError $ strMsg "not char value"
+toJdiValue (J.IntValue v) = return (IntValue $ fromIntegral v)
 
-integerValue :: (Monad m, Error e, MonadError e m) =>
-                J.Value -> m Int
-integerValue (J.IntValue v) = return $ fromIntegral v
-integerValue _ = throwError $ strMsg "not integer value"
+toJdiValue (J.LongValue v) = return (LongValue $ fromIntegral v)
 
-longValue :: (Monad m, Error e, MonadError e m) =>
-                J.Value -> m Int
-longValue (J.LongValue v) = return $ fromIntegral v
-longValue _ = throwError $ strMsg "not long value"
+toJdiValue (J.ArrayValue objectId) = return (ArrayValue $
+                                                J.ArrayReference objectId)
 
-arrayValue :: (Monad m, Error e, MonadError e m) =>
-              J.Value -> m J.ArrayReference
-arrayValue (J.ArrayValue objectId) = return $ J.ArrayReference objectId
-arrayValue _ = throwError $ strMsg "not array value"
+toJdiValue (J.StringValue objectId) = return (StringValue $
+                                                J.StringReference objectId)
+toJdiValue _ = throwError $ strMsg "unknown value yet"
 
-stringValue :: (MonadIO m, Error e, MonadError e m) =>
-               J.Value -> VirtualMachine m J.StringReference
-stringValue (J.StringValue objectId) = return $ J.StringReference objectId
-stringValue _ = throwError $ strMsg "not string value"
-
-data ValueType = ArrayValue
-               | ByteValue
-               | CharValue
-               | ObjectValue
-               | FloatValue
-               | DoubleValue
-               | IntValue
-               | LongValue
-               | ShortValue
-               | VoidValue
-               | BooleanValue
-               | StringValue
-               | ThreadValue
-               | ThreadGroupValue
-               | ClassLoaderValue
-               | ClassObjectValue
-                 deriving (Eq, Show)
+data Value = ArrayValue J.ArrayReference
+           | ByteValue Int
+           | CharValue Char
+       --    | ObjectValue ObjectReference
+           | FloatValue Float
+           | DoubleValue Double
+           | IntValue Int
+           | LongValue Int
+           | ShortValue Int
+           | VoidValue
+           | BooleanValue Bool
+           | StringValue J.StringReference
+           | ThreadValue J.ThreadReference
+           | ThreadGroupValue J.ThreadGroupReference
+       --    | ClassLoaderValue
+       --    | ClassObjectValue
+             deriving (Eq, Show)
 
 data StackFrame = StackFrame J.ThreadReference J.StackFrame
                   deriving (Eq, Show)
 
 getValue :: (Error e, MonadIO m, MonadError e m) =>
-            StackFrame -> LocalVariable -> VirtualMachine m J.Value
+            StackFrame -> LocalVariable -> VirtualMachine m Value
 getValue (StackFrame (J.ThreadReference ti) (J.StackFrame fi _))
          (LocalVariable _ _ slot) = do
     reply <- runCommand $ J.getValuesCommand ti fi [slot]
     idsizes <- getIdSizes
-    return $ head $ runGet
+    toJdiValue $ head $ runGet
                         (J.parseGetValuesReply idsizes)
                         (J.toLazy $ J.dat reply)
 

@@ -100,13 +100,11 @@ body = do
     fr <- head <$> allFrames curThread
     mainArgs <- arguments methodMain
     mainArgsValue <- getValue fr (head mainArgs)
-    case valueType mainArgsValue of
-        ArrayValue -> do
-            arrV <- arrayValue mainArgsValue
-            aV <- getArrValue arrV 0
+    case mainArgsValue of
+        ArrayValue arrV -> do
+            (StringValue aV) <- getArrValue arrV 0
             sV <- stringValue aV
-            sss <- toStringValue sV
-            liftIO $ putStrLn sss
+            liftIO $ putStrLn sV
         otherwise  -> liftIO $ putStrLn "Not array value"
 
 
