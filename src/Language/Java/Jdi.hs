@@ -47,6 +47,7 @@ module Language.Java.Jdi
 , J.StringReference
 , stringValue
 , getArrValue
+, getArrValues
 , arrLength
 , Value(..)
 , StackFrame
@@ -605,7 +606,7 @@ stringValue sr@(J.StringReference sid) = do
     reply <- runCommand $ J.stringValueCommand sid
     return $ runGet J.parseString (J.toLazy $ J.dat reply)
 
-getArrValue:: (Error e, MonadIO m, MonadError e m) =>
+getArrValue :: (Error e, MonadIO m, MonadError e m) =>
                J.ArrayReference -> Int -> VirtualMachine m Value
 getArrValue arrRef@(J.ArrayReference objId) index = do
     idsizes <- getIdSizes
@@ -613,6 +614,16 @@ getArrValue arrRef@(J.ArrayReference objId) index = do
     let r = J.dat reply
     let values = runGet (J.parseArrayRegion idsizes) (J.toLazy r)
     toJdiValue $ head values
+
+getArrValues :: (Error e, MonadIO m, MonadError e m) =>
+                J.ArrayReference -> VirtualMachine m [Value]
+getArrValues arrRef@(J.ArrayReference objId) = do
+    idsizes <- getIdSizes
+    l <- arrLength arrRef
+    reply <- runCommand $ J.getArrayValuesCommand objId 0 (fromIntegral l)
+    let r = J.dat reply
+    let values = runGet (J.parseArrayRegion idsizes) (J.toLazy r)
+    mapM toJdiValue values
 
 arrLength :: (Error e, MonadIO m, MonadError e m) =>
              J.ArrayReference -> VirtualMachine m Int
