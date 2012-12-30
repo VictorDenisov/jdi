@@ -104,24 +104,29 @@ data JavaLocation = JavaLocation
                   , index    :: Word64
                   } deriving (Show, Eq)
 
+-- Byte marshalling functions
 putByte :: JavaByte -> Put
 putByte v = put v
 
 parseByte :: Get JavaByte
 parseByte = get
 
+-- Boolean marshalling functions
 parseBoolean :: Get JavaBoolean
 parseBoolean = (/= 0) <$> (get :: Get Word8)
 
+-- Int marshalling functions
 putInt :: JavaInt -> Put
 putInt v = put v
 
 parseInt :: Get JavaInt
 parseInt = get
 
+-- Long marshalling functions
 parseLong :: Get JavaLong
 parseLong = get
 
+-- String marshalling functions
 parseString :: Get JavaString
 parseString = do
     len <- fromIntegral <$> (get :: Get Word32)
@@ -132,6 +137,7 @@ putString s = do
     put $ ((fromIntegral (length s)) :: Word32)
     mapM_ put (B.unpack $ B8.pack $ s)
 
+-- Location marshalling functions
 putLocation :: JavaLocation -> Put
 putLocation (JavaLocation typeTag classId methodId index) = do
     putTypeTag  typeTag
@@ -145,6 +151,7 @@ parseLocation is = JavaLocation <$> parseTypeTag
                                 <*> parseMethodId (methodIdSize is)
                                 <*> parseLong
 
+-- Dynamic value marshalling functions
 putDynamicSizedValue :: JavaInt -> Word64 -> Put
 putDynamicSizedValue s v = case s of
     1 -> put ((fromIntegral v) :: Word8)
@@ -161,54 +168,56 @@ parseDynamicSizedValue 8 = fromIntegral <$> (get :: Get Word64)
 parseDynamicSizedValue s =
     error $ "Currently we can not process values of this size: " ++ show s
 
---- fieldId
+--- Field id marshalling funcitons
 putFieldId :: JavaFieldId -> Put
 putFieldId (JavaFieldId size v) = putDynamicSizedValue size v
 
 parseFieldId :: JavaInt -> Get JavaFieldId
 parseFieldId s = JavaFieldId s <$> parseDynamicSizedValue s
 
---- methodId
+--- Method id marshalling funcitons
 putMethodId :: JavaMethodId -> Put
 putMethodId (JavaMethodId size v) = putDynamicSizedValue size v
 
 parseMethodId :: JavaInt -> Get JavaMethodId
 parseMethodId s = JavaMethodId s <$> parseDynamicSizedValue s
 
---- objectId
+--- Object id marshalling funcitons
 putObjectId :: JavaObjectId -> Put
 putObjectId (JavaObjectId size v) = putDynamicSizedValue size v
 
 parseObjectId :: JavaInt -> Get JavaObjectId
 parseObjectId s = JavaObjectId s <$> parseDynamicSizedValue s
 
---- referenceTypeId
+--- ReferenceType id marshalling funcitons
 putReferenceTypeId :: JavaReferenceTypeId -> Put
 putReferenceTypeId (JavaReferenceTypeId size v) = putDynamicSizedValue size v
 
 parseReferenceTypeId :: JavaInt -> Get JavaReferenceTypeId
 parseReferenceTypeId s = JavaReferenceTypeId s <$> parseDynamicSizedValue s
 
---- frameId
+--- Frame id marshalling funcitons
 putFrameId :: JavaFrameId -> Put
 putFrameId (JavaFrameId size v) = putDynamicSizedValue size v
 
 parseFrameId :: JavaInt -> Get JavaFrameId
 parseFrameId s = JavaFrameId s <$> parseDynamicSizedValue s
 
-----------
+-- Thread id marshalling funcitons
 putThreadId :: JavaThreadId -> Put
 putThreadId = putObjectId
 
 parseThreadId :: JavaInt -> Get JavaThreadId
 parseThreadId = parseObjectId
 
+-- Thread group id marshalling funcitons
 putThreadGroupId :: JavaThreadGroupId -> Put
 putThreadGroupId = putObjectId
 
 parseThreadGroupId :: JavaInt -> Get JavaThreadGroupId
 parseThreadGroupId = parseObjectId
 
+-- Class id marshalling funcitons
 putClassId :: JavaClassId -> Put
 putClassId = putReferenceTypeId
 
@@ -309,7 +318,7 @@ data EventSet = EventSet
               , events        :: [Event]
               } deriving (Show, Eq)
 
---                event kind, requestId, event kind specific data
+-- requestId, event kind specific data
 data Event = VmStartEvent
                     JavaInt
                     JavaThreadId
@@ -337,6 +346,7 @@ threadId :: Event -> JavaThreadId
 threadId (VmStartEvent _ ti) = ti
 threadId (ClassPrepareEvent _ ti _ _ _ _) = ti
 threadId (BreakpointEvent _ ti _) = ti
+threadId (StepEvent _ ti _) = ti
 
 eventKind :: Event -> EventKind
 eventKind (VmStartEvent {})= VmStart
