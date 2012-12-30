@@ -42,6 +42,7 @@ module Language.Java.Jdi
 , createStepRequest
 , J.ReferenceType
 , genericSignature
+, allFields
 , allMethods
 , J.ArrayReference
 , J.StringReference
@@ -589,6 +590,15 @@ createStepRequest tr ss sd = EventRequest J.SuspendAll Nothing [] (StepRequest t
 genericSignature :: J.ReferenceType -> String
 genericSignature (J.ReferenceType _ _ gs _) = gs
 
+allFields :: (Error e, MonadIO m, MonadError e m) =>
+             J.ReferenceType -> VirtualMachine m [Field]
+allFields rt@(J.ReferenceType _ refId _ _) = do
+    idsizes <- getIdSizes
+    reply <- runCommand $ J.fieldsCommand refId
+    let r = J.dat reply
+    let fields = runGet (J.parseFieldsReply idsizes) (J.toLazy r)
+    return $ map (Field rt) fields
+
 allMethods :: (Error e, MonadIO m, MonadError e m) => J.ReferenceType -> VirtualMachine m [Method]
 allMethods rt@(J.ReferenceType _ refId _ _) = do
     idsizes <- getIdSizes
@@ -720,6 +730,9 @@ getFrames tr@(J.ThreadReference ti) start len = do
     reply <- runCommand $ J.framesCommand ti (fromIntegral start) (fromIntegral len)
     let r = J.dat reply
     return $ map (StackFrame tr) $ runGet (J.parseStackFrameList idsizes) (J.toLazy r)
+
+data Field = Field J.ReferenceType J.Field
+              deriving (Eq, Show)
 
 data Method = Method J.ReferenceType J.Method
               deriving (Eq, Show)

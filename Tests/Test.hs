@@ -5,9 +5,10 @@ import Network.Socket.Internal (PortNumber(..))
 import Network
 import Control.Monad.Trans (liftIO, lift)
 import Control.Applicative ((<$>))
-import Control.Monad (forM_, filterM, void, liftM)
+import Control.Monad (forM_, filterM, void, liftM, when)
 import Control.Monad.Error (MonadError(..), runErrorT, ErrorT)
 import Data.List
+import System.Exit
 
 main = do
     result <- runVirtualMachine "localhost" (PortNumber 2044) body
@@ -40,6 +41,9 @@ body = do
     threadGroups <- topLevelThreadGroups
     liftIO . putStrLn $ intercalate "\n" (map show threadGroups)
     let mainClass = head $ filter isMainClass classes
+    fields <- allFields mainClass
+    when (length fields /= 2) $ liftIO exitFailure
+    liftIO . putStrLn $ "Main class fields: " ++ show fields
     sName <- sourceName mainClass
     liftIO . putStrLn $ "Main class source name: " ++ sName
     methods <- allMethods mainClass
