@@ -145,14 +145,15 @@ putDynamicSizedValue s v = case s of
     2 -> put ((fromIntegral v) :: Word16)
     4 -> put ((fromIntegral v) :: Word32)
     8 -> put ((fromIntegral v) :: Word64)
-    _ -> error $ "Currently we can not process values of this size: " ++ (show s)
+    _ -> error $ "Currently we can not process values of this size: " ++ show s
 
 parseDynamicSizedValue :: JavaInt -> Get Word64
 parseDynamicSizedValue 1 = fromIntegral <$> (get :: Get Word8)
 parseDynamicSizedValue 2 = fromIntegral <$> (get :: Get Word16)
 parseDynamicSizedValue 4 = fromIntegral <$> (get :: Get Word32)
 parseDynamicSizedValue 8 = fromIntegral <$> (get :: Get Word64)
-parseDynamicSizedValue s = error $ "Currently we can not process values of this size: " ++ (show s)
+parseDynamicSizedValue s =
+    error $ "Currently we can not process values of this size: " ++ show s
 
 --- fieldId
 putFieldId :: JavaFieldId -> Put
@@ -230,9 +231,18 @@ threadIdSize is = objectIdSize is
 threadGroupIdSize :: IdSizes -> JavaInt
 threadGroupIdSize is = objectIdSize is
 
-{- | Several Event objects may be created at a given time by the target VirtualMachine. For example, there may be more than one BreakpointRequest for a given Location or you might single step to the same location as a BreakpointRequest. These Event objects are delivered together as an EventSet. For uniformity, an EventSet is always used to deliver Event objects. EventSets are delivered by the EventQueue. EventSets are unmodifiable.
+{- | Several Event objects may be created at a given time by the target
+VirtualMachine. For example, there may be more than one BreakpointRequest
+for a given Location or you might single step to the same location as
+a BreakpointRequest. These Event objects are delivered together as
+an EventSet. For uniformity, an EventSet is always used to deliver Event
+objects. EventSets are delivered by the EventQueue.
+EventSets are unmodifiable.
 
-Associated with the issuance of an event set, suspensions may have occurred in the target VM. These suspensions correspond with the suspend policy. To assure matching resumes occur, it is recommended, where possible, to complete the processing of an event set with EventSet.resume().
+Associated with the issuance of an event set, suspensions may have occurred in
+the target VM. These suspensions correspond with the suspend policy. To assure
+matching resumes occur, it is recommended, where possible, to complete the
+processing of an event set with EventSet.resume().
 
 The events that are grouped in an EventSet are restricted in the following ways:
 
@@ -278,7 +288,8 @@ Only with other MethodExitEvents for the same method exit:
 
     - MethodExitEvent
 
-Only with other members of this group, at the same location and in the same thread:
+Only with other members of this group, at the same location
+and in the same thread:
 
     - BreakpointEvent
 
@@ -502,14 +513,17 @@ lengthOfEventModifier (Step (JavaObjectId l v) _ _) = 1 + l + 4 + 4
 lengthOfEventModifier _ = error "unhandled size yet"
 
 fromNumber :: [(JavaByte, a)] -> JavaByte -> a
-fromNumber list n = case find ((== n) . fst) list of
-                            Just (_, v)  -> v
-                            Nothing -> error $ "Number " ++ (show n) ++ " doesn't match any value from list"
+fromNumber list n =
+    case find ((== n) . fst) list of
+        Just (_, v)  -> v
+        Nothing ->
+            error $ "Number " ++ show n ++ " doesn't match any value from list"
 
 toNumber :: (Eq a, Show a) => [(JavaByte, a)] -> a -> JavaByte
-toNumber list e = case find ((== e) . snd) list of
-                            Just (n, _) -> n
-                            Nothing     -> error $ "list doesn't have value " ++ (show e)
+toNumber list e =
+    case find ((== e) . snd) list of
+        Just (n, _) -> n
+        Nothing     -> error $ "list doesn't have value " ++ show e
 
 eventKindNumbers :: [(JavaByte, EventKind)]
 eventKindNumbers = [ (  1, SingleStep)
@@ -680,13 +694,20 @@ putStepDepth StepOut  = putInt 2
 
 --- EventModifier
 putEventModifier :: EventModifier -> Put
-putEventModifier (Count count)               = putByte 1 >> put count
-putEventModifier (Conditional exprId)        = putByte 2 >> put exprId
-putEventModifier (ThreadOnly threadId)       = putByte 3 >> putThreadId threadId
-putEventModifier (ClassOnly clazz)           = putByte 4 >> putReferenceTypeId clazz
-putEventModifier (ClassMatch classPattern)   = putByte 5 >> putString classPattern
-putEventModifier (ClassExclude classPattern) = putByte 6 >> putString classPattern
-putEventModifier (LocationOnly location)     = putByte 7 >> putLocation location
+putEventModifier (Count count) =
+    putByte 1 >> put count
+putEventModifier (Conditional exprId) =
+    putByte 2 >> put exprId
+putEventModifier (ThreadOnly threadId) =
+    putByte 3 >> putThreadId threadId
+putEventModifier (ClassOnly clazz) =
+    putByte 4 >> putReferenceTypeId clazz
+putEventModifier (ClassMatch classPattern) =
+    putByte 5 >> putString classPattern
+putEventModifier (ClassExclude classPattern) =
+    putByte 6 >> putString classPattern
+putEventModifier (LocationOnly location) =
+    putByte 7 >> putLocation location
 putEventModifier (ExceptionOnly exceptionOrNull caught uncaught) = do
     putByte 8
     putReferenceTypeId exceptionOrNull
@@ -730,13 +751,14 @@ parseEvent :: IdSizes -> Get Event
 parseEvent idsizes = do
     eventKind <- parseEventKind
     case eventKind of
-        ClassPrepare -> ClassPrepareEvent
-                            <$> parseInt
-                            <*> (parseThreadId $ threadIdSize idsizes)
-                            <*> parseTypeTag
-                            <*> (parseReferenceTypeId $ referenceTypeIdSize idsizes)
-                            <*> parseString
-                            <*> parseClassStatus
+        ClassPrepare ->
+            ClassPrepareEvent
+                <$> parseInt
+                <*> (parseThreadId $ threadIdSize idsizes)
+                <*> parseTypeTag
+                <*> (parseReferenceTypeId $ referenceTypeIdSize idsizes)
+                <*> parseString
+                <*> parseClassStatus
         Breakpoint -> BreakpointEvent
                             <$> parseInt
                             <*> parseThreadId (threadIdSize idsizes)
@@ -792,7 +814,8 @@ parseClassesBySignatureReply idsizes = do
     mapM (\_ -> parseReferenceTypeNoSignature idsizes) [1..classCount]
 
 parseThreadReference :: IdSizes -> Get ThreadReference
-parseThreadReference idsizes = ThreadReference <$> (parseThreadId $ threadIdSize idsizes)
+parseThreadReference idsizes =
+    ThreadReference <$> (parseThreadId $ threadIdSize idsizes)
 
 parseAllThreadsReply :: IdSizes -> Get [ThreadReference]
 parseAllThreadsReply idsizes = do
@@ -860,9 +883,12 @@ parseUntaggedValue idsizes tg =
         BooleanTag -> BooleanValue <$> (get :: Get Word8)
         StringTag -> StringValue <$> parseObjectId (objectIdSize idsizes)
         ThreadTag -> ThreadValue <$> parseObjectId (objectIdSize idsizes)
-        ThreadGroupTag -> ThreadGroupValue <$> parseObjectId (objectIdSize idsizes)
-        ClassLoaderTag -> ClassLoaderValue <$> parseObjectId (objectIdSize idsizes)
-        ClassObjectTag -> ClassObjectValue <$> parseObjectId (objectIdSize idsizes)
+        ThreadGroupTag -> ThreadGroupValue
+                                <$> parseObjectId (objectIdSize idsizes)
+        ClassLoaderTag -> ClassLoaderValue
+                                <$> parseObjectId (objectIdSize idsizes)
+        ClassObjectTag -> ClassObjectValue
+                                <$> parseObjectId (objectIdSize idsizes)
 
 parseArrayRegion :: IdSizes -> Get [Value]
 parseArrayRegion idsizes = do
@@ -915,7 +941,12 @@ resumeVmCommand :: PacketId -> Packet
 resumeVmCommand packetId = CommandPacket 11 packetId 0 1 9 B.empty
 
 resumeThreadCommand :: JavaThreadId -> PacketId -> Packet
-resumeThreadCommand threadId packetId = CommandPacket 19 packetId 0 11 3 (toStrict $ runPut $ putThreadId threadId)
+resumeThreadCommand threadId packetId =
+    CommandPacket
+        19
+        packetId
+        0 11 3
+        (toStrict $ runPut $ putThreadId threadId)
 
 eventSetRequest :: EventKind
                 -> SuspendPolicy
@@ -986,7 +1017,10 @@ lineTableCommand
             (toStrict $ runPut $ putReferenceTypeId typeId
                                  >> putMethodId methodId)
 
-variableTableCommand :: JavaReferenceTypeId -> JavaMethodId -> PacketId -> Packet
+variableTableCommand :: JavaReferenceTypeId
+                     -> JavaMethodId
+                     -> PacketId
+                     -> Packet
 variableTableCommand refId@(JavaReferenceTypeId rSize _)
                      mId@(JavaMethodId mSize _)
                      packetId =
@@ -1116,9 +1150,10 @@ waitReply :: Handle -> IO Packet
 waitReply h = do
     packet <- receivePacket h
     case packet of
-        CommandPacket _ _ _ _ _ _ -> error "reply expected, but command received"
-        {- Normally here some queue should be implemented, but currectly for brevity
-         - we assume that we never get event before reply.
+        CommandPacket _ _ _ _ _ _
+            -> error "reply expected, but command received"
+        {- Normally here some queue should be implemented, but currectly
+         - for brevity we assume that we never get event before reply.
          -}
         ReplyPacket _ _ _ _ _ -> return packet
 
@@ -1127,7 +1162,8 @@ waitEvent h = do
     packet <- receivePacket h
     case packet of
         CommandPacket _ _ _ _ _ _ -> return packet
-        ReplyPacket _ _ _ _ _ -> error "CommandPacket is expected, but reply packet received"
+        ReplyPacket _ _ _ _ _
+            -> error "CommandPacket is expected, but reply packet received"
 
 sendPacket :: Handle -> Packet -> IO ()
 sendPacket h p = do
