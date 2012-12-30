@@ -1013,6 +1013,13 @@ signatureCommand typeId@(JavaReferenceTypeId rSize _) packetId =
         packetId 0 2 1
         (toStrict $ runPut $ putReferenceTypeId typeId)
 
+classLoaderCommand :: JavaReferenceTypeId -> PacketId -> Packet
+classLoaderCommand typeId@(JavaReferenceTypeId rSize _) packetId =
+    CommandPacket
+        (11 + rSize)
+        packetId 0 2 2
+        (toStrict $ runPut $ putReferenceTypeId typeId)
+
 modifiersCommand :: JavaReferenceTypeId -> PacketId -> Packet
 modifiersCommand typeId@(JavaReferenceTypeId rSize _) packetId =
     CommandPacket
