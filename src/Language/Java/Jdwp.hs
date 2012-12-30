@@ -4,7 +4,7 @@ module Language.Java.Jdwp where
 
 import Data.Binary (Binary(..), Get, Put)
 import Data.Binary.Get (runGet, getByteString)
-import Data.Binary.Put (runPut)
+import Data.Binary.Put (runPut, putByteString)
 
 import Data.Bits ((.&.))
 import Data.Char (ord)
@@ -50,33 +50,35 @@ packetHeaderSize = 11
 
 parsePacket :: Get Packet
 parsePacket = do
-    l <- get
-    i <- get
-    f <- get
-    if (f .&. 0x80) == 0
+    len   <- get
+    id    <- get
+    flags <- get
+    if (flags .&. 0x80) == 0
         then do
-            cs <- get
-            c  <- get
-            d  <- getByteString (fromIntegral l - packetHeaderSize)
-            return (CommandPacket l i f cs c d)
+            cmdSet <- get
+            cmd    <- get
+            dat    <- getByteString (fromIntegral len - packetHeaderSize)
+            return (CommandPacket len id flags cmdSet cmd dat)
         else do
-            e <- get
-            d <- getByteString (fromIntegral l - packetHeaderSize)
-            return (ReplyPacket l i f e d)
+            err <- get
+            dat <- getByteString (fromIntegral len - packetHeaderSize)
+            return (ReplyPacket len id flags err dat)
 
 putPacket :: Packet -> Put
-putPacket (CommandPacket l i f cs c d) = do
-    put l
-    put i
-    put f
-    put cs
-    put c
+putPacket (CommandPacket len id flags cmdSet cmd dat) = do
+    put len
+    put id
+    put flags
+    put cmdSet
+    put cmd
+    putByteString dat
 
-putPacket (ReplyPacket l i f e d) = do
-    put l
-    put i
-    put f
-    put e
+putPacket (ReplyPacket len id flags err dat) = do
+    put len
+    put id
+    put flags
+    put err
+    putByteString dat
 -- }}}
 
 ------------General types section {{{
@@ -1184,7 +1186,6 @@ waitEvent h = do
 sendPacket :: Handle -> Packet -> IO ()
 sendPacket h p = do
     LB.hPut h $ runPut $ putPacket p
-    B.hPut h $ dat p
     hFlush h
 
 -- }}}
