@@ -1,3 +1,5 @@
+-- This module is an implementation of JDWP.
+-- http://docs.oracle.com/javase/7/docs/platform/jpda/jdwp/jdwp-protocol.html
 module Language.Java.Jdwp where
 
 import Data.Word (Word8, Word16, Word32, Word64)
@@ -21,8 +23,7 @@ import Control.Monad (guard, when)
 import Control.Monad.Error (ErrorT, runErrorT)
 import Control.Monad.IO.Class (MonadIO)
 
-------------Packet description and parsing section.
--- {{{
+------------Packet description and parsing section. {{{
 type PacketId = Word32
 type CommandSet = Word8
 type Command = Word8
@@ -74,8 +75,8 @@ putPacket (ReplyPacket l i f e d) = do
     put f
     put e
 -- }}}
----------------General types section
--- {{{
+
+------------General types section {{{
 type JavaByte            = Word8
 type JavaInt             = Word32
 type JavaLong            = Word64
@@ -895,10 +896,8 @@ parseArrayRegion idsizes = do
     tg <- parseTag
     valuesCount <- parseInt
     if primitiveTag tg
-        then
-            mapM (\_ -> parseUntaggedValue idsizes tg) [1..valuesCount]
-        else
-            mapM (\_ -> parseTaggedValue idsizes) [1..valuesCount]
+        then mapM (\_ -> parseUntaggedValue idsizes tg) [1..valuesCount]
+        else mapM (\_ -> parseTaggedValue idsizes)      [1..valuesCount]
 
 putEventRequest :: EventKind -> SuspendPolicy -> [EventModifier] -> Put
 putEventRequest ek sp ems = do
@@ -929,56 +928,21 @@ toStrict = B.concat . LB.toChunks
 toLazy :: B.ByteString -> LB.ByteString
 toLazy v = LB.fromChunks [v]
 -- }}}
-------------Command Constructors Section
--- {{{
+
+------------Command Constructors Section {{{
+-- Commands are ordered accordingly to their group and id numbers.
+
+-- Virtual Machine command set. (1) {{{
 versionCommand :: PacketId -> Packet
 versionCommand packetId = CommandPacket 11 packetId 0 1 1 B.empty
 
-idSizesCommand :: PacketId -> Packet
-idSizesCommand packetId = CommandPacket 11 packetId 0 1 7 B.empty
-
-resumeVmCommand :: PacketId -> Packet
-resumeVmCommand packetId = CommandPacket 11 packetId 0 1 9 B.empty
-
-resumeThreadCommand :: JavaThreadId -> PacketId -> Packet
-resumeThreadCommand threadId packetId =
+classesBySignatureCommand :: JavaString -> PacketId -> Packet
+classesBySignatureCommand jniName packetId =
     CommandPacket
-        19
+        (11 + lengthOfJavaString jniName)
         packetId
-        0 11 3
-        (toStrict $ runPut $ putThreadId threadId)
-
-eventSetRequest :: EventKind
-                -> SuspendPolicy
-                -> [EventModifier]
-                -> PacketId
-                -> Packet
-eventSetRequest ek sp ems packetId =
-    CommandPacket
-        (11 + (6 + lengthOfEventModifiers))
-        packetId
-        0
-        15
-        1
-        (toStrict $ runPut $ putEventRequest ek sp ems)
-    where
-        lengthOfEventModifiers = (foldr (+) 0 (map lengthOfEventModifier ems))
-
-eventClearRequest :: EventKind -> JavaInt -> PacketId -> Packet
-eventClearRequest ek requestId packetId =
-    CommandPacket
-        (11 + 5)
-        packetId
-        0
-        15
-        2
-        (toStrict $ runPut $ putClearEvent ek requestId)
-       
-capabilitiesCommand :: PacketId -> Packet
-capabilitiesCommand packetId = CommandPacket 11 packetId 0 1 12 B.empty
-
-capabilitiesNewCommand :: PacketId -> Packet
-capabilitiesNewCommand packetId = CommandPacket 11 packetId 0 1 17 B.empty
+        0 1 2
+        (toStrict $ runPut $ putString jniName)
 
 allClassesCommand :: PacketId -> Packet
 allClassesCommand packetId = CommandPacket 11 packetId 0 1 3 B.empty
@@ -986,49 +950,30 @@ allClassesCommand packetId = CommandPacket 11 packetId 0 1 3 B.empty
 allThreadsCommand :: PacketId -> Packet
 allThreadsCommand packetId = CommandPacket 11 packetId 0 1 4 B.empty
 
-classesBySignatureCommand :: JavaString -> PacketId -> Packet
-classesBySignatureCommand jniName packetId =
-    CommandPacket
-        (11 + lengthOfJavaString jniName)
-        packetId
-        0
-        1
-        2
-        (toStrict $ runPut $ putString jniName)
-
-exitCommand :: JavaInt -> PacketId -> Packet
-exitCommand packetId exitCode =
-    CommandPacket (11 + 4) packetId 0 1 10 (toStrict $ runPut $ put exitCode)
-
 topLevelThreadGroupsCommand :: PacketId -> Packet
 topLevelThreadGroupsCommand packetId = CommandPacket 11 packetId 0 1 5 B.empty
 
 disposeCommand :: PacketId -> Packet
 disposeCommand packetId = CommandPacket 11 packetId 0 1 6 B.empty
 
-lineTableCommand :: JavaReferenceTypeId -> JavaMethodId -> PacketId -> Packet
-lineTableCommand
-            typeId@(JavaReferenceTypeId rSize _)
-            methodId@(JavaMethodId mSize _)
-            packetId =
-    CommandPacket
-            (11 + rSize + mSize)
-            packetId 0 6 1
-            (toStrict $ runPut $ putReferenceTypeId typeId
-                                 >> putMethodId methodId)
+idSizesCommand :: PacketId -> Packet
+idSizesCommand packetId = CommandPacket 11 packetId 0 1 7 B.empty
 
-variableTableCommand :: JavaReferenceTypeId
-                     -> JavaMethodId
-                     -> PacketId
-                     -> Packet
-variableTableCommand refId@(JavaReferenceTypeId rSize _)
-                     mId@(JavaMethodId mSize _)
-                     packetId =
-    CommandPacket
-        (11 + rSize + mSize)
-        packetId 0 6 2
-        (toStrict $ runPut $ (putReferenceTypeId refId >> putMethodId mId))
+resumeVmCommand :: PacketId -> Packet
+resumeVmCommand packetId = CommandPacket 11 packetId 0 1 9 B.empty
 
+exitCommand :: JavaInt -> PacketId -> Packet
+exitCommand packetId exitCode =
+    CommandPacket (11 + 4) packetId 0 1 10 (toStrict $ runPut $ put exitCode)
+
+capabilitiesCommand :: PacketId -> Packet
+capabilitiesCommand packetId = CommandPacket 11 packetId 0 1 12 B.empty
+
+capabilitiesNewCommand :: PacketId -> Packet
+capabilitiesNewCommand packetId = CommandPacket 11 packetId 0 1 17 B.empty
+--}}}
+
+-- ReferenceType command set. (2) {{{
 signatureCommand :: JavaReferenceTypeId -> PacketId -> Packet
 signatureCommand typeId@(JavaReferenceTypeId rSize _) packetId =
     CommandPacket
@@ -1059,19 +1004,57 @@ statusCommand typeId@(JavaReferenceTypeId rSize _) packetId =
         packetId 0 2 9
         (toStrict $ runPut $ putReferenceTypeId typeId)
 
+-- }}}
+
+-- Method command set. (6) {{{
+lineTableCommand :: JavaReferenceTypeId -> JavaMethodId -> PacketId -> Packet
+lineTableCommand
+            typeId@(JavaReferenceTypeId rSize _)
+            methodId@(JavaMethodId mSize _)
+            packetId =
+    CommandPacket
+            (11 + rSize + mSize)
+            packetId 0 6 1
+            (toStrict $ runPut $ putReferenceTypeId typeId
+                                 >> putMethodId methodId)
+
+variableTableCommand :: JavaReferenceTypeId
+                     -> JavaMethodId
+                     -> PacketId
+                     -> Packet
+variableTableCommand refId@(JavaReferenceTypeId rSize _)
+                     mId@(JavaMethodId mSize _)
+                     packetId =
+    CommandPacket
+        (11 + rSize + mSize)
+        packetId 0 6 2
+        (toStrict $ runPut $ (putReferenceTypeId refId >> putMethodId mId))
+-- }}}
+
+-- StringReference command set. (10) {{{
 stringValueCommand :: JavaObjectId -> PacketId -> Packet
 stringValueCommand sId@(JavaObjectId s _) packetId =
     CommandPacket
         (11 + s)
         packetId 0 10 1
         (toStrict $ runPut $ putObjectId sId)
+-- }}}
 
+-- ThreadReference command set. (11) {{{
 threadReferenceNameCommand :: JavaThreadId -> PacketId -> Packet
 threadReferenceNameCommand ti@(JavaObjectId size _) packetId =
     CommandPacket
         (11 + size)
         packetId 0 11 1
         (toStrict $ runPut $ putThreadId ti)
+
+resumeThreadCommand :: JavaThreadId -> PacketId -> Packet
+resumeThreadCommand threadId packetId =
+    CommandPacket
+        19
+        packetId
+        0 11 3
+        (toStrict $ runPut $ putThreadId threadId)
 
 framesCommand :: JavaThreadId -> JavaInt -> JavaInt -> PacketId -> Packet
 framesCommand threadId@(JavaObjectId s _) startFrame len packetId =
@@ -1089,7 +1072,9 @@ frameCountCommand threadId@(JavaObjectId s _) packetId =
         (11 + s)
         packetId 0 11 7
         (toStrict $ runPut $ putThreadId threadId)
+-- }}}
 
+-- ArrayReference command set. (13) {{{
 lengthCommand :: JavaObjectId -> PacketId -> Packet
 lengthCommand
             arrayId@(JavaObjectId st _)
@@ -1113,6 +1098,33 @@ getArrayValuesCommand arrayId@(JavaObjectId st _) firstIndex length packetId =
                             putInt firstIndex
                             putInt length)
 
+-- }}}
+
+-- EventRequest command set. (15) {{{
+eventSetRequest :: EventKind
+                -> SuspendPolicy
+                -> [EventModifier]
+                -> PacketId
+                -> Packet
+eventSetRequest ek sp ems packetId =
+    CommandPacket
+        (11 + (6 + lengthOfEventModifiers))
+        packetId
+        0 15 1
+        (toStrict $ runPut $ putEventRequest ek sp ems)
+    where
+        lengthOfEventModifiers = (foldr (+) 0 (map lengthOfEventModifier ems))
+
+eventClearRequest :: EventKind -> JavaInt -> PacketId -> Packet
+eventClearRequest ek requestId packetId =
+    CommandPacket
+        (11 + 5)
+        packetId
+        0 15 2
+        (toStrict $ runPut $ putClearEvent ek requestId)
+-- }}}
+
+-- StackFrame command set. (16) {{{
 getValuesCommand :: JavaThreadId -> JavaFrameId -> [Slot] -> PacketId -> Packet
 getValuesCommand
             threadId@(JavaObjectId st _)
@@ -1132,8 +1144,9 @@ getValuesCommand
             putInt slot
             putByte $ fromIntegral $ ord $ head sig
 -- }}}
-------------Jdwp communication functions
--- {{{
+-- }}}
+
+------------Jdwp communication functions {{{
 
 receivePacket :: Handle -> IO Packet
 receivePacket h = do
