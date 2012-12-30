@@ -2,26 +2,29 @@
 -- http://docs.oracle.com/javase/7/docs/platform/jpda/jdwp/jdwp-protocol.html
 module Language.Java.Jdwp where
 
-import Data.Word (Word8, Word16, Word32, Word64)
+import Data.Binary (Binary(..), Get, Put)
+import Data.Binary.Get (runGet, getByteString)
+import Data.Binary.Put (runPut)
+
+import Data.Bits ((.&.))
+import Data.Char (ord)
 import Data.Int (Int8, Int16, Int32, Int64)
+import Data.List (find)
+import Data.Word (Word8, Word16, Word32, Word64)
+
+import Control.Applicative ((<$>), (<*>))
+import Control.Monad (guard, when)
+import Control.Monad.Trans (liftIO, lift)
+import Control.Monad.Error (ErrorT, runErrorT)
+import Control.Monad.IO.Class (MonadIO)
+import GHC.IO.Handle ( Handle, hClose, hSetBinaryMode
+                     , hPutStr, hFlush, hWaitForInput )
+
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.ByteString.Lazy as LB
 import qualified Data.ByteString.Lazy.Char8 as LB8
 import qualified Data.Map as M
-import Data.Binary (Binary(..), Get, Put)
-import Data.Bits ((.&.))
-import Data.Char (ord)
-import Data.List (find)
-import Control.Applicative ((<$>), (<*>))
-import Data.Binary.Get (runGet, getByteString)
-import Data.Binary.Put (runPut)
-import Control.Monad.Trans (liftIO, lift)
-import GHC.IO.Handle ( Handle , hClose, hSetBinaryMode
-                     , hPutStr, hFlush, hWaitForInput )
-import Control.Monad (guard, when)
-import Control.Monad.Error (ErrorT, runErrorT)
-import Control.Monad.IO.Class (MonadIO)
 
 ------------Packet description and parsing section. {{{
 type PacketId = Word32
