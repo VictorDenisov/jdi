@@ -437,6 +437,10 @@ data ArrayReference = ArrayReference JavaObjectId
 data StringReference = StringReference JavaObjectId
                       deriving (Eq, Show)
 
+                    -- fieldId name signature modBits
+data Field = Field JavaFieldId String String JavaInt
+             deriving (Eq, Show)
+
                     -- methodId name signature modBits
 data Method = Method JavaMethodId String String JavaInt
               deriving (Eq, Show)
@@ -806,6 +810,19 @@ parseReferenceTypeNoSignature idsizes =
         <*> (return "")
         <*> parseClassStatus
 
+parseField :: IdSizes -> Get Field
+parseField idsizes =
+    Field
+        <$> (parseFieldId $ fieldIdSize idsizes)
+        <*> parseString
+        <*> parseString
+        <*> parseInt
+
+parseFieldsReply :: IdSizes -> Get [Field]
+parseFieldsReply idsizes = do
+    fieldCount <- parseInt
+    mapM (\_ -> parseField idsizes) [1..fieldCount]
+
 parseMethod :: IdSizes -> Get Method
 parseMethod idsizes =
     Method
@@ -994,6 +1011,13 @@ signatureCommand typeId@(JavaReferenceTypeId rSize _) packetId =
     CommandPacket
         (11 + rSize)
         packetId 0 2 1
+        (toStrict $ runPut $ putReferenceTypeId typeId)
+
+fieldsCommand :: JavaReferenceTypeId -> PacketId -> Packet
+fieldsCommand typeId@(JavaReferenceTypeId rSize _) packetId =
+    CommandPacket
+        (11 + rSize)
+        packetId 0 2 4
         (toStrict $ runPut $ putReferenceTypeId typeId)
 
 methodsCommand :: JavaReferenceTypeId -> PacketId -> Packet
