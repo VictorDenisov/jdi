@@ -1,6 +1,11 @@
 module Language.Java.Jdi
 ( VirtualMachine
 , runVirtualMachine
+, Name(..)
+, Resumable(..)
+, Locatable(..)
+, SourceName(..)
+, AllLineLocations(..)
 , vmName
 , description
 , version
@@ -27,10 +32,10 @@ module Language.Java.Jdi
 , resumeVm
 , topLevelThreadGroups
 , J.Event
-, J.EventKind(..)
-, J.eventKind
 , referenceType
 , thread
+, J.EventKind(..)
+, J.eventKind
 , J.EventSet(..)
 , removeEvent
 , EventRequest
@@ -45,11 +50,11 @@ module Language.Java.Jdi
 , allFields
 , allMethods
 , J.ArrayReference
-, J.StringReference
-, stringValue
 , getArrValue
 , getArrValues
 , arrLength
+, J.StringReference
+, stringValue
 , Value(..)
 , StackFrame
 , getValue
@@ -60,6 +65,7 @@ module Language.Java.Jdi
 , J.ThreadGroupReference
 , J.StepSize(..)
 , J.StepDepth(..)
+, Field
 , Method
 , arguments
 , variables
@@ -71,13 +77,9 @@ module Language.Java.Jdi
 , lineNumber
 , method
 , J.SuspendPolicy(..)
-, Resumable(..)
-, Name(..)
-, Locatable(..)
-, SourceName(..)
-, AllLineLocations(..)
 ) where
 
+-- Imports {{{
 import Control.Monad.State (StateT(..), MonadState(..), evalStateT)
 import Control.Monad.Error (ErrorT, runErrorT, MonadError(..), Error(..))
 import qualified Language.Java.Jdwp as J
@@ -96,11 +98,11 @@ import Data.Binary.Put (runPut)
 import Data.List (find)
 import GHC.IO.Handle (hWaitForInput)
 import qualified Data.Sequence as S
+-- }}}
 
 type VirtualMachine = StateT VmState
 
--- VmState
----- {{{
+-- VmState section {{{
 data VmState = VmState
     { idSizesConf     :: Maybe J.IdSizes
     , packetIdCounter :: J.PacketId
@@ -198,6 +200,7 @@ handshake h = do
     when (value /= (B8.pack "JDWP-Handshake")) $ throwError $ strMsg "Handshake failed"
 -- }}}
 
+-- runVirtualMachine section {{{
 {- | Executes source code which communicates with virtual machine.
  Source code is executed for Vm running on the defined host and port.
  -}
@@ -254,9 +257,9 @@ releaseResources = do
 
 initialVmState :: Handle -> VmState
 initialVmState h = VmState Nothing 0 h S.empty Nothing Nothing
+-- }}}
 
--- Classes definitions.
--- {{{
+-- Classes definitions. {{{
 
 class Name a where
     name :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m String
@@ -275,8 +278,9 @@ class AllLineLocations a where
 
 -- }}}
 
---- Functions from official interface
--- {{{
+--- Functions from official interface {{{
+
+-- VirtualMachine functions section {{{
 
 -- | Returns the name of the target VM as reported by the property java.vm.name.
 vmName :: MonadIO m => VirtualMachine m String
@@ -459,25 +463,9 @@ topLevelThreadGroups = do
     let groups = runGet (J.parseThreadGroupsReply idsizes) (J.toLazy r)
     return groups
 
-instance Resumable J.EventSet where
-    resume (J.EventSet J.SuspendAll _) = resumeVm
-    resume (J.EventSet J.SuspendEventThread events)
-                                       = resumeThreadId
-                                       $ J.threadId
-                                       $ head events
-    resume (J.EventSet J.SuspendNone _) = return ()
+-- }}}
 
-removeEvent :: MonadIO m => VirtualMachine m J.EventSet
-removeEvent = do
-    h <- getVmHandle
-    idsizes <- getIdSizes
-    qe <- queueEmpty
-    if qe
-        then do
-            eventSetData <- J.dat `liftM` (liftIO $ J.waitEvent h)
-            return $ runGet (J.parseEventSet idsizes) (J.toLazy eventSetData)
-        else takeFromQueue
-
+-- Event functions section {{{
 instance Locatable J.Event where
     location (J.BreakpointEvent _ _ javaLocation) =
         locationFromJavaLocation javaLocation
@@ -524,6 +512,31 @@ thread (J.StepEvent
             _
             threadId
             _) = J.ThreadReference threadId
+
+-- }}}
+
+-- EventSet functions section {{{
+instance Resumable J.EventSet where
+    resume (J.EventSet J.SuspendAll _) = resumeVm
+    resume (J.EventSet J.SuspendEventThread events)
+                                       = resumeThreadId
+                                       $ J.threadId
+                                       $ head events
+    resume (J.EventSet J.SuspendNone _) = return ()
+
+removeEvent :: MonadIO m => VirtualMachine m J.EventSet
+removeEvent = do
+    h <- getVmHandle
+    idsizes <- getIdSizes
+    qe <- queueEmpty
+    if qe
+        then do
+            eventSetData <- J.dat `liftM` (liftIO $ J.waitEvent h)
+            return $ runGet (J.parseEventSet idsizes) (J.toLazy eventSetData)
+        else takeFromQueue
+-- }}}
+
+-- EventRequest functions section. {{{
 
 data EventRequest = EventRequest
                         J.SuspendPolicy
@@ -587,6 +600,10 @@ createBreakpointRequest l = EventRequest J.SuspendAll Nothing [] (BreakpointRequ
 createStepRequest :: J.ThreadReference -> J.StepSize -> J.StepDepth -> EventRequest
 createStepRequest tr ss sd = EventRequest J.SuspendAll Nothing [] (StepRequest tr ss sd)
 
+-- }}}
+
+-- ReferenceType functions section {{{
+
 genericSignature :: J.ReferenceType -> String
 genericSignature (J.ReferenceType _ _ gs _) = gs
 
@@ -599,7 +616,8 @@ allFields rt@(J.ReferenceType _ refId _ _) = do
     let fields = runGet (J.parseFieldsReply idsizes) (J.toLazy r)
     return $ map (Field rt) fields
 
-allMethods :: (Error e, MonadIO m, MonadError e m) => J.ReferenceType -> VirtualMachine m [Method]
+allMethods :: (Error e, MonadIO m, MonadError e m) =>
+              J.ReferenceType -> VirtualMachine m [Method]
 allMethods rt@(J.ReferenceType _ refId _ _) = do
     idsizes <- getIdSizes
     reply <- runCommand $ J.methodsCommand refId
@@ -610,11 +628,19 @@ allMethods rt@(J.ReferenceType _ refId _ _) = do
 instance Name J.ReferenceType where
     name = return . signatureToName . genericSignature
 
-stringValue :: (Error e, MonadIO m, MonadError e m) =>
-                 J.StringReference -> VirtualMachine m String
-stringValue sr@(J.StringReference sid) = do
-    reply <- runCommand $ J.stringValueCommand sid
-    return $ runGet J.parseString (J.toLazy $ J.dat reply)
+instance SourceName J.ReferenceType where
+    sourceName (J.ReferenceType _ refId _ _) = do
+        reply <- runCommand $ J.sourceFileCommand refId
+        let r = J.dat reply
+        let sourceName = runGet J.parseString (J.toLazy r)
+        return sourceName
+
+instance AllLineLocations J.ReferenceType where
+    allLineLocations refType = concat `liftM` ((mapM allLineLocations) =<< (allMethods refType))
+
+-- }}}
+
+-- ArrayReference functions section {{{
 
 getArrValue :: (Error e, MonadIO m, MonadError e m) =>
                J.ArrayReference -> Int -> VirtualMachine m Value
@@ -643,24 +669,19 @@ arrLength arrRef@(J.ArrayReference objId) = do
     let value = runGet J.parseInt (J.toLazy r)
     return $ fromIntegral value
 
-toJdiValue :: (Monad m, Error e, MonadError e m) =>
-              (J.Value -> m Value)
-toJdiValue (J.BooleanValue v) = return (BooleanValue $ v /= 0)
+-- }}}
 
-toJdiValue (J.ByteValue v) = return (ByteValue $ fromIntegral v)
+-- StringReference functions section {{{
 
-toJdiValue (J.CharValue v) = return (CharValue $ toEnum $ fromIntegral v)
+stringValue :: (Error e, MonadIO m, MonadError e m) =>
+                 J.StringReference -> VirtualMachine m String
+stringValue sr@(J.StringReference sid) = do
+    reply <- runCommand $ J.stringValueCommand sid
+    return $ runGet J.parseString (J.toLazy $ J.dat reply)
 
-toJdiValue (J.IntValue v) = return (IntValue $ fromIntegral v)
+-- }}}
 
-toJdiValue (J.LongValue v) = return (LongValue $ fromIntegral v)
-
-toJdiValue (J.ArrayValue objectId) = return (ArrayValue $
-                                                J.ArrayReference objectId)
-
-toJdiValue (J.StringValue objectId) = return (StringValue $
-                                                J.StringReference objectId)
-toJdiValue _ = throwError $ strMsg "unknown value yet"
+-- Value functions section {{{
 
 data Value = ArrayValue J.ArrayReference
            | ByteValue Int
@@ -680,6 +701,29 @@ data Value = ArrayValue J.ArrayReference
        --    | ClassObjectValue
              deriving (Eq, Show)
 
+toJdiValue :: (Monad m, Error e, MonadError e m) =>
+              (J.Value -> m Value)
+toJdiValue (J.BooleanValue v) = return (BooleanValue $ v /= 0)
+
+toJdiValue (J.ByteValue v) = return (ByteValue $ fromIntegral v)
+
+toJdiValue (J.CharValue v) = return (CharValue $ toEnum $ fromIntegral v)
+
+toJdiValue (J.IntValue v) = return (IntValue $ fromIntegral v)
+
+toJdiValue (J.LongValue v) = return (LongValue $ fromIntegral v)
+
+toJdiValue (J.ArrayValue objectId) = return (ArrayValue $
+                                                J.ArrayReference objectId)
+
+toJdiValue (J.StringValue objectId) = return (StringValue $
+                                                J.StringReference objectId)
+toJdiValue _ = throwError $ strMsg "unknown value yet"
+
+-- }}}
+
+-- StackFrame functions section {{{
+
 data StackFrame = StackFrame J.ThreadReference J.StackFrame
                   deriving (Eq, Show)
 
@@ -696,6 +740,10 @@ getValue (StackFrame (J.ThreadReference ti) (J.StackFrame fi _))
 instance Locatable StackFrame where
     location (StackFrame _ (J.StackFrame _ javaLoc))
                         = locationFromJavaLocation javaLoc
+
+-- }}}
+
+-- ThreadReference functions section {{{
 
 instance Name J.ThreadReference where
     name (J.ThreadReference refId) = do
@@ -731,8 +779,16 @@ getFrames tr@(J.ThreadReference ti) start len = do
     let r = J.dat reply
     return $ map (StackFrame tr) $ runGet (J.parseStackFrameList idsizes) (J.toLazy r)
 
+-- }}}
+
+-- Field functions section {{{
+
 data Field = Field J.ReferenceType J.Field
               deriving (Eq, Show)
+
+-- }}}
+
+-- Method functions section {{{
 
 data Method = Method J.ReferenceType J.Method
               deriving (Eq, Show)
@@ -762,12 +818,19 @@ variablesByName :: (Error e, MonadIO m, MonadError e m) =>
                    Method -> String -> VirtualMachine m [LocalVariable]
 variablesByName method varName =
     variables method >>= filterM (((varName ==) `liftM`) . name)
+-- }}}
+
+-- LocalVariable functions section {{{
 
 data LocalVariable = LocalVariable J.ReferenceType J.Method J.Slot
                      deriving (Show, Eq)
 
 instance Name LocalVariable where
     name (LocalVariable _ _ (J.Slot _ nm _ _ _)) = return nm
+
+-- }}}
+
+-- Location functions section {{{
 
 data Location = Location J.ReferenceType J.Method J.Line
                 deriving (Show, Eq)
@@ -787,19 +850,11 @@ method (Location refType method _) = Method refType method
 instance SourceName Location where
     sourceName (Location ref _ _) = sourceName ref
 
-instance SourceName J.ReferenceType where
-    sourceName (J.ReferenceType _ refId _ _) = do
-        reply <- runCommand $ J.sourceFileCommand refId
-        let r = J.dat reply
-        let sourceName = runGet J.parseString (J.toLazy r)
-        return sourceName
-
-instance AllLineLocations J.ReferenceType where
-    allLineLocations refType = concat `liftM` ((mapM allLineLocations) =<< (allMethods refType))
+-- }}}
 
 -- }}}
 
---- Auxiliary functions
+--- Auxiliary functions {{{
 runVersionCommand :: MonadIO m => VirtualMachine m J.Version
 runVersionCommand = do
     h <- getVmHandle
@@ -883,5 +938,7 @@ getVariables (Method
             return $ map (LocalVariable ref m) slots
     where
         slot (J.Slot _ _ _ _ s) = s
+
+-- }}}
 
 -- vim: foldmethod=marker foldmarker={{{,}}}
