@@ -1041,11 +1041,26 @@ methodsCommand typeId@(JavaReferenceTypeId size _) packetId =
         packetId 0 2 5
         (toStrict $ runPut $ putReferenceTypeId typeId)
 
+refGetValuesCommand :: JavaReferenceTypeId -> [Field] -> PacketId -> Packet
+refGetValuesCommand typeId@(JavaReferenceTypeId size _) fs packetId =
+    CommandPacket
+        (11 + size + 4 + len fs * fieldSize fs)
+        packetId 0 2 6
+        (toStrict $ runPut $ do
+            putReferenceTypeId typeId
+            putInt $ len fs
+            putFields fs)
+    where
+        len = fromIntegral . length
+        fieldSize [] = 0
+        fieldSize ((Field (JavaFieldId fsize _ ) _ _ _) : _) = fsize
+        putFields = mapM_ $ \(Field id _ _ _) -> putFieldId id
+
 sourceFileCommand :: JavaReferenceTypeId -> PacketId -> Packet
 sourceFileCommand
                 typeId@(JavaReferenceTypeId rSize _)
-                packetId
-    = CommandPacket
+                packetId =
+    CommandPacket
         (11 + rSize)
         packetId 0 2 7
         (toStrict $ runPut $ putReferenceTypeId typeId)
