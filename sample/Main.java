@@ -1,6 +1,6 @@
 public class Main {
-    public int f1;
-    private String fprivate;
+    static public int f1 = 10;
+    static private String fprivate = "fprivate_value";
 
     public static void main(String[] args) {
         System.out.println("Hello all");

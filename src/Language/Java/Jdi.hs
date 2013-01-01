@@ -47,6 +47,7 @@ module Language.Java.Jdi
 , createStepRequest
 , J.ReferenceType
 , genericSignature
+, refTypeGetValue
 , allFields
 , allMethods
 , J.ArrayReference
@@ -57,7 +58,7 @@ module Language.Java.Jdi
 , stringValue
 , Value(..)
 , StackFrame
-, getValue
+, stackFrameGetValue
 , J.ThreadReference
 , allFrames
 , frameCount
@@ -607,6 +608,22 @@ createStepRequest tr ss sd = EventRequest J.SuspendAll Nothing [] (StepRequest t
 genericSignature :: J.ReferenceType -> String
 genericSignature (J.ReferenceType _ _ gs _) = gs
 
+{- | Gets the Value of a given static Field in this type. The Field must be
+valid for this type; that is, it must be declared in this type, a superclass,
+a superinterface, or an implemented interface.
+
+Program should be started to be sure static fields are properly
+initialized.
+ -}
+refTypeGetValue :: (Error e, MonadIO m, MonadError e m) =>
+                   J.ReferenceType -> Field -> VirtualMachine m Value
+refTypeGetValue (J.ReferenceType _ ri _ _) (Field _ f)= do
+    reply <- runCommand $ J.refGetValuesCommand ri [f]
+    idsizes <- getIdSizes
+    toJdiValue $ head $ runGet
+                        (J.parseGetValuesReply idsizes)
+                        (J.toLazy $ J.dat reply)
+
 allFields :: (Error e, MonadIO m, MonadError e m) =>
              J.ReferenceType -> VirtualMachine m [Field]
 allFields rt@(J.ReferenceType _ refId _ _) = do
@@ -718,7 +735,7 @@ toJdiValue (J.ArrayValue objectId) = return (ArrayValue $
 
 toJdiValue (J.StringValue objectId) = return (StringValue $
                                                 J.StringReference objectId)
-toJdiValue _ = throwError $ strMsg "unknown value yet"
+toJdiValue v = throwError $ strMsg $ "unknown value yet " ++ show v
 
 -- }}}
 
@@ -727,9 +744,9 @@ toJdiValue _ = throwError $ strMsg "unknown value yet"
 data StackFrame = StackFrame J.ThreadReference J.StackFrame
                   deriving (Eq, Show)
 
-getValue :: (Error e, MonadIO m, MonadError e m) =>
+stackFrameGetValue :: (Error e, MonadIO m, MonadError e m) =>
             StackFrame -> LocalVariable -> VirtualMachine m Value
-getValue (StackFrame (J.ThreadReference ti) (J.StackFrame fi _))
+stackFrameGetValue (StackFrame (J.ThreadReference ti) (J.StackFrame fi _))
          (LocalVariable _ _ slot) = do
     reply <- runCommand $ J.getValuesCommand ti fi [slot]
     idsizes <- getIdSizes

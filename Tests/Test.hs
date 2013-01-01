@@ -6,7 +6,7 @@ import Network
 import Control.Monad.Trans (liftIO, lift)
 import Control.Applicative ((<$>))
 import Control.Monad (forM_, filterM, void, liftM, when)
-import Control.Monad.Error (MonadError(..), runErrorT, ErrorT)
+import Control.Monad.Error (MonadError(..), runErrorT, ErrorT, Error(..))
 import Data.List
 import System.Exit
 
@@ -103,7 +103,7 @@ body = do
     let curThread = thread ev
     fr <- head <$> allFrames curThread
     mainArgs <- arguments methodMain
-    mainArgsValue <- getValue fr (head mainArgs)
+    mainArgsValue <- stackFrameGetValue fr (head mainArgs)
     case mainArgsValue of
         ArrayValue arrV -> do
             (StringValue aV) <- getArrValue arrV 0
@@ -115,6 +115,8 @@ body = do
     spr <- enable $ (createStepRequest (thread ev) StepLine StepOver)
     resumeVm
     void $ removeEvent
+    fieldValues <- mapM (refTypeGetValue mainClass) fields
+    checkFieldValues fieldValues
     resumeVm
     void $ removeEvent
 
@@ -148,6 +150,18 @@ body = do
         _ -> False
     liftIO . putStrLn $ "Exiting"
 
+checkFieldValues fieldValues = do
+    liftIO . putStrLn $ "Main class field values: " ++ show fieldValues
+    when ((intValue $ fieldValues !! 0) /= 10)
+                    $ throwError $ strMsg "field value not equals 10"
+    sv <- strValue $ fieldValues !! 1
+    when (sv /= "fprivate_value")
+                    $ throwError $ strMsg "field value not equals fprivate_value"
+
+intValue (IntValue v) = v
+
+strValue (StringValue sv) = stringValue sv
+
 getValueOfI curThread = do
     frCnt <- frameCount curThread
     liftIO $ putStrLn $ "Frame count: " ++ (show frCnt)
@@ -157,8 +171,7 @@ getValueOfI curThread = do
     liftIO $ putStrLn $ show loc
     var <- head <$> variablesByName (method loc) "i"
     liftIO $ putStrLn $ show var
-    getValue fr var
-
+    stackFrameGetValue fr var
 
 pollEvents stopFunction = do
     resumeVm
