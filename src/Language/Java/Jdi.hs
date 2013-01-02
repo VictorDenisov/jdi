@@ -4,10 +4,6 @@ module Language.Java.Jdi
 , Locatable(..)
 , SourceName(..)
 , AllLineLocations(..)
-, ArrayReference
-, getArrValue
-, getArrValues
-, arrLength
 , StringReference
 , stringValue
 , Value(..)

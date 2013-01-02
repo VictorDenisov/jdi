@@ -5,6 +5,7 @@ import qualified Language.Java.Jdi.Event as E
 import qualified Language.Java.Jdi.EventSet as ES
 import qualified Language.Java.Jdi.EventRequest as ER
 import qualified Language.Java.Jdi.ReferenceType as RT
+import qualified Language.Java.Jdi.ArrayReference as AR
 
 import Network.Socket.Internal (PortNumber(..))
 import Network
@@ -111,7 +112,7 @@ body = do
     mainArgsValue <- stackFrameGetValue fr (head mainArgs)
     case mainArgsValue of
         ArrayValue arrV -> do
-            (StringValue aV) <- getArrValue arrV 0
+            (StringValue aV) <- AR.getArrValue arrV 0
             sV <- stringValue aV
             liftIO $ putStrLn sV
         otherwise  -> liftIO $ putStrLn "Not array value"
