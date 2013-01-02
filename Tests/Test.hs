@@ -10,6 +10,7 @@ import qualified Language.Java.Jdi.StringReference as SR
 import qualified Language.Java.Jdi.Value as V
 import qualified Language.Java.Jdi.StackFrame as SF
 import qualified Language.Java.Jdi.ThreadReference as TR
+import qualified Language.Java.Jdi.Method as M
 
 import Network.Socket.Internal (PortNumber(..))
 import Network
@@ -68,26 +69,26 @@ body = do
     anotherMethod <- head <$> (filterM isAnotherMethod methods)
     liftIO . putStrLn $ "Variables of method anotherMethod: " ++ (show anotherMethod)
     do
-        l <- arguments anotherMethod
+        l <- M.arguments anotherMethod
         liftIO $ putStrLn $ show l
      `catchError`
             (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
     liftIO . putStrLn $ "Variables of method main: " ++ (show methodMain)
     do
-        l <- variables methodMain
+        l <- M.variables methodMain
         liftIO $ putStrLn $ show l
      `catchError`
             (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
 
     liftIO . putStrLn $ "VariablesByName"
     do
-        l <- variablesByName methodMain "i"
+        l <- M.variablesByName methodMain "i"
         liftIO $ putStrLn $ show l
      `catchError`
             (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
     liftIO . putStrLn $ "Arguments of the method main"
     do
-        mainArgs <- arguments methodMain
+        mainArgs <- M.arguments methodMain
         liftIO $ putStrLn $ show mainArgs
      `catchError`
             (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
@@ -112,7 +113,7 @@ body = do
 
     let curThread = E.thread ev
     fr <- head <$> TR.allFrames curThread
-    mainArgs <- arguments methodMain
+    mainArgs <- M.arguments methodMain
     mainArgsValue <- SF.stackFrameGetValue fr (head mainArgs)
     case mainArgsValue of
         V.ArrayValue arrV -> do
@@ -179,7 +180,7 @@ getValueOfI curThread = do
     liftIO $ putStrLn $ show fr
     loc <- location fr
     liftIO $ putStrLn $ show loc
-    var <- head <$> variablesByName (method loc) "i"
+    var <- head <$> M.variablesByName (method loc) "i"
     liftIO $ putStrLn $ show var
     SF.stackFrameGetValue fr var
 

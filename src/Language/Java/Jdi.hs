@@ -6,10 +6,6 @@ module Language.Java.Jdi
 , AllLineLocations(..)
 , StepSize(..)
 , StepDepth(..)
-, Method
-, arguments
-, variables
-, variablesByName
 , LocalVariable
 , Location
 , codeIndex
