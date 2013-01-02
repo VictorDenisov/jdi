@@ -8,6 +8,7 @@ import qualified Language.Java.Jdi.ReferenceType as RT
 import qualified Language.Java.Jdi.ArrayReference as AR
 import qualified Language.Java.Jdi.StringReference as SR
 import qualified Language.Java.Jdi.Value as V
+import qualified Language.Java.Jdi.StackFrame as SF
 
 import Network.Socket.Internal (PortNumber(..))
 import Network
@@ -111,7 +112,7 @@ body = do
     let curThread = E.thread ev
     fr <- head <$> allFrames curThread
     mainArgs <- arguments methodMain
-    mainArgsValue <- stackFrameGetValue fr (head mainArgs)
+    mainArgsValue <- SF.stackFrameGetValue fr (head mainArgs)
     case mainArgsValue of
         V.ArrayValue arrV -> do
             (V.StringValue aV) <- AR.getArrValue arrV 0
@@ -179,7 +180,7 @@ getValueOfI curThread = do
     liftIO $ putStrLn $ show loc
     var <- head <$> variablesByName (method loc) "i"
     liftIO $ putStrLn $ show var
-    stackFrameGetValue fr var
+    SF.stackFrameGetValue fr var
 
 pollEvents stopFunction = do
     Vm.resumeVm
