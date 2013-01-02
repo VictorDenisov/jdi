@@ -2,6 +2,7 @@ module Main where
 import Language.Java.Jdi
 import qualified Language.Java.Jdi.VirtualMachine as Vm
 import qualified Language.Java.Jdi.Event as E
+import qualified Language.Java.Jdi.EventSet as ES
 
 import Network.Socket.Internal (PortNumber(..))
 import Network
@@ -20,8 +21,8 @@ body :: Vm.VirtualMachine IO ()
 body = do
     jdv <- Vm.version
     liftIO . putStrLn $ "JdwpVersion: " ++ (show jdv)
-    es <- removeEvent
-    liftIO . putStrLn $ case suspendPolicy es of
+    es <- ES.removeEvent
+    liftIO . putStrLn $ case ES.suspendPolicy es of
                             SuspendAll -> "this is suspend all"
                             SuspendNone -> "this is suspend none"
                             SuspendEventThread -> "this is suspend event thread"
@@ -116,16 +117,16 @@ body = do
 
     spr <- enable $ (createStepRequest (E.thread ev) StepLine StepOver)
     Vm.resumeVm
-    void $ removeEvent
+    void $ ES.removeEvent
     fieldValues <- mapM (refTypeGetValue mainClass) fields
     checkFieldValues fieldValues
     Vm.resumeVm
-    void $ removeEvent
+    void $ ES.removeEvent
 
     liftIO . putStrLn $ "trying step requests"
     Vm.resumeVm
-    es0 <- removeEvent
-    let e0 = head $ events es0
+    es0 <- ES.removeEvent
+    let e0 = head $ ES.events es0
     liftIO $ putStrLn $ show e0
 
     do
@@ -135,10 +136,10 @@ body = do
         (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
 
     Vm.resumeVm
-    void $ removeEvent
+    void $ ES.removeEvent
     Vm.resumeVm
-    es1 <- removeEvent
-    let e1 = head $ events es1
+    es1 <- ES.removeEvent
+    let e1 = head $ ES.events es1
     liftIO $ putStrLn $ show e1
 
     do
@@ -177,9 +178,9 @@ getValueOfI curThread = do
 
 pollEvents stopFunction = do
     Vm.resumeVm
-    es <- removeEvent
+    es <- ES.removeEvent
     liftIO $ putStrLn $ show es
-    let e = head $ events es
+    let e = head $ ES.events es
     if stopFunction e
         then return e
         else pollEvents stopFunction
