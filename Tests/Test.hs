@@ -1,6 +1,7 @@
 module Main where
 import Language.Java.Jdi
 import qualified Language.Java.Jdi.VirtualMachine as Vm
+import qualified Language.Java.Jdi.Event as E
 
 import Network.Socket.Internal (PortNumber(..))
 import Network
@@ -28,8 +29,8 @@ body = do
     rd <- enable createClassPrepareRequest
     liftIO . putStrLn $ show rd
 
-    pollEvents $ \e -> case eventKind e of
-        ClassPrepare -> isMainClass $ referenceType e
+    pollEvents $ \e -> case E.eventKind e of
+        E.ClassPrepare -> isMainClass $ E.referenceType e
         _ -> False
 
     classes <- Vm.allClasses
@@ -92,8 +93,8 @@ body = do
     liftIO . putStrLn $ "Enabling breakpoint request"
     bpr <- enable $ createBreakpointRequest mainLocation
     liftIO . putStrLn $ "breakpoint request is enabled"
-    ev <- pollEvents $ \e -> case eventKind e of
-        Breakpoint -> True
+    ev <- pollEvents $ \e -> case E.eventKind e of
+        E.Breakpoint -> True
         _ -> False
     liftIO . putStrLn $ "breakpoint stopped at location"
     liftIO . putStrLn $ show methodMain
@@ -101,7 +102,7 @@ body = do
     liftIO . putStrLn $ show loc
     liftIO . putStrLn $ "Values of args"
 
-    let curThread = thread ev
+    let curThread = E.thread ev
     fr <- head <$> allFrames curThread
     mainArgs <- arguments methodMain
     mainArgsValue <- stackFrameGetValue fr (head mainArgs)
@@ -113,7 +114,7 @@ body = do
         otherwise  -> liftIO $ putStrLn "Not array value"
 
 
-    spr <- enable $ (createStepRequest (thread ev) StepLine StepOver)
+    spr <- enable $ (createStepRequest (E.thread ev) StepLine StepOver)
     Vm.resumeVm
     void $ removeEvent
     fieldValues <- mapM (refTypeGetValue mainClass) fields
@@ -128,7 +129,7 @@ body = do
     liftIO $ putStrLn $ show e0
 
     do
-        v0 <- getValueOfI $ thread e0
+        v0 <- getValueOfI $ E.thread e0
         liftIO $ putStrLn $ show v0
      `catchError`
         (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
@@ -141,13 +142,13 @@ body = do
     liftIO $ putStrLn $ show e1
 
     do
-        v1 <- getValueOfI $ thread e1
+        v1 <- getValueOfI $ E.thread e1
         liftIO $ putStrLn $ show v1
      `catchError`
         (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
 
-    pollEvents $ \e -> case eventKind e of
-        VmDeath -> True
+    pollEvents $ \e -> case E.eventKind e of
+        E.VmDeath -> True
         _ -> False
     liftIO . putStrLn $ "Exiting"
 

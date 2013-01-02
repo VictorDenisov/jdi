@@ -4,11 +4,6 @@ module Language.Java.Jdi
 , Locatable(..)
 , SourceName(..)
 , AllLineLocations(..)
-, Event
-, referenceType
-, thread
-, EventKind(..)
-, eventKind
 , EventSet(..)
 , removeEvent
 , EventRequest
