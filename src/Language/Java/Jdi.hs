@@ -4,13 +4,6 @@ module Language.Java.Jdi
 , Locatable(..)
 , SourceName(..)
 , AllLineLocations(..)
-, EventRequest
-, enable
-, disable
-, addCountFilter
-, createClassPrepareRequest
-, createBreakpointRequest
-, createStepRequest
 , ReferenceType
 , genericSignature
 , refTypeGetValue

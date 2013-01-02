@@ -3,6 +3,7 @@ import Language.Java.Jdi
 import qualified Language.Java.Jdi.VirtualMachine as Vm
 import qualified Language.Java.Jdi.Event as E
 import qualified Language.Java.Jdi.EventSet as ES
+import qualified Language.Java.Jdi.EventRequest as ER
 
 import Network.Socket.Internal (PortNumber(..))
 import Network
@@ -27,7 +28,7 @@ body = do
                             SuspendNone -> "this is suspend none"
                             SuspendEventThread -> "this is suspend event thread"
     liftIO . putStrLn $ show es
-    rd <- enable createClassPrepareRequest
+    rd <- ER.enable ER.createClassPrepareRequest
     liftIO . putStrLn $ show rd
 
     pollEvents $ \e -> case E.eventKind e of
@@ -92,7 +93,7 @@ body = do
     classLineLocations <- allLineLocations mainClass
     liftIO . putStrLn $ intercalate "\n" (map show classLineLocations)
     liftIO . putStrLn $ "Enabling breakpoint request"
-    bpr <- enable $ createBreakpointRequest mainLocation
+    bpr <- ER.enable $ ER.createBreakpointRequest mainLocation
     liftIO . putStrLn $ "breakpoint request is enabled"
     ev <- pollEvents $ \e -> case E.eventKind e of
         E.Breakpoint -> True
@@ -115,7 +116,7 @@ body = do
         otherwise  -> liftIO $ putStrLn "Not array value"
 
 
-    spr <- enable $ (createStepRequest (E.thread ev) StepLine StepOver)
+    spr <- ER.enable $ (ER.createStepRequest (E.thread ev) StepLine StepOver)
     Vm.resumeVm
     void $ ES.removeEvent
     fieldValues <- mapM (refTypeGetValue mainClass) fields
