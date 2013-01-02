@@ -118,7 +118,7 @@ body = do
     mainArgsValue <- SF.stackFrameGetValue fr (head mainArgs)
     case mainArgsValue of
         V.ArrayValue arrV -> do
-            (V.StringValue aV) <- AR.getArrValue arrV 0
+            (V.StringValue aV) <- AR.getValue arrV 0
             sV <- SR.stringValue aV
             liftIO $ putStrLn sV
         otherwise  -> liftIO $ putStrLn "Not array value"
