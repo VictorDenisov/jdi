@@ -127,7 +127,7 @@ body = do
     spr <- ER.enable $ (ER.createStepRequest (E.thread ev) StepLine StepOver)
     Vm.resumeVm
     void $ ES.removeEvent
-    fieldValues <- mapM (RT.refTypeGetValue mainClass) fields
+    fieldValues <- mapM (RT.getValue mainClass) fields
     checkFieldValues fieldValues
     Vm.resumeVm
     void $ ES.removeEvent
