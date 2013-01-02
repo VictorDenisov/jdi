@@ -28,6 +28,7 @@ Executable Test
 Library
         hs-source-dirs:         src
         exposed-modules:        Language.Java.Jdi
+                              , Language.Java.Jdi.VirtualMachine
         build-depends:          base >= 3.0.3.1 && <= 4.5.0.0
                               , containers >= 0.4.2.1
                               , binary >= 0.5.1.0

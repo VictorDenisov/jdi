@@ -1,5 +1,6 @@
 module Main where
 import Language.Java.Jdi
+import qualified Language.Java.Jdi.VirtualMachine as Vm
 
 import Network.Socket.Internal (PortNumber(..))
 import Network
@@ -11,12 +12,12 @@ import Data.List
 import System.Exit
 
 main = do
-    result <- runVirtualMachine "localhost" (PortNumber 2044) body
+    result <- Vm.runVirtualMachine "localhost" (PortNumber 2044) body
     putStrLn "Execution ok"
 
-body :: VirtualMachine IO ()
+body :: Vm.VirtualMachine IO ()
 body = do
-    jdv <- version
+    jdv <- Vm.version
     liftIO . putStrLn $ "JdwpVersion: " ++ (show jdv)
     es <- removeEvent
     liftIO . putStrLn $ case suspendPolicy es of
@@ -31,14 +32,14 @@ body = do
         ClassPrepare -> isMainClass $ referenceType e
         _ -> False
 
-    classes <- allClasses
+    classes <- Vm.allClasses
     cNames <- mapM name classes
     liftIO . putStrLn $ intercalate "\n" cNames
-    threads <- allThreads
+    threads <- Vm.allThreads
     liftIO . putStrLn $ intercalate "\n" (map show threads)
-    filteredClasses <- classesByName "java.io.BufferedReader"
+    filteredClasses <- Vm.classesByName "java.io.BufferedReader"
     liftIO . putStrLn $ intercalate "\n" (map show filteredClasses)
-    threadGroups <- topLevelThreadGroups
+    threadGroups <- Vm.topLevelThreadGroups
     liftIO . putStrLn $ intercalate "\n" (map show threadGroups)
     let mainClass = head $ filter isMainClass classes
     fields <- allFields mainClass
@@ -49,7 +50,7 @@ body = do
     methods <- allMethods mainClass
     liftIO . putStrLn $ "Methods for class " ++ (show mainClass)
     liftIO . putStrLn $ intercalate "\n" (map show methods)
-    liftIO . putStrLn =<< vmName
+    liftIO . putStrLn =<< Vm.vmName
     liftIO . putStrLn =<< (name $ head methods)
     forM_ threads (\thread -> liftIO . putStrLn =<< name thread)
     let isMainMethod = (liftM ("main" ==)) . name
@@ -113,15 +114,15 @@ body = do
 
 
     spr <- enable $ (createStepRequest (thread ev) StepLine StepOver)
-    resumeVm
+    Vm.resumeVm
     void $ removeEvent
     fieldValues <- mapM (refTypeGetValue mainClass) fields
     checkFieldValues fieldValues
-    resumeVm
+    Vm.resumeVm
     void $ removeEvent
 
     liftIO . putStrLn $ "trying step requests"
-    resumeVm
+    Vm.resumeVm
     es0 <- removeEvent
     let e0 = head $ events es0
     liftIO $ putStrLn $ show e0
@@ -132,9 +133,9 @@ body = do
      `catchError`
         (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
 
-    resumeVm
+    Vm.resumeVm
     void $ removeEvent
-    resumeVm
+    Vm.resumeVm
     es1 <- removeEvent
     let e1 = head $ events es1
     liftIO $ putStrLn $ show e1
@@ -174,7 +175,7 @@ getValueOfI curThread = do
     stackFrameGetValue fr var
 
 pollEvents stopFunction = do
-    resumeVm
+    Vm.resumeVm
     es <- removeEvent
     liftIO $ putStrLn $ show es
     let e = head $ events es
