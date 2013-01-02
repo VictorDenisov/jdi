@@ -4,7 +4,6 @@ module Language.Java.Jdi
 , Locatable(..)
 , SourceName(..)
 , AllLineLocations(..)
-, Value(..)
 , StackFrame
 , stackFrameGetValue
 , ThreadReference

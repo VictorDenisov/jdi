@@ -7,6 +7,7 @@ import qualified Language.Java.Jdi.EventRequest as ER
 import qualified Language.Java.Jdi.ReferenceType as RT
 import qualified Language.Java.Jdi.ArrayReference as AR
 import qualified Language.Java.Jdi.StringReference as SR
+import qualified Language.Java.Jdi.Value as V
 
 import Network.Socket.Internal (PortNumber(..))
 import Network
@@ -112,8 +113,8 @@ body = do
     mainArgs <- arguments methodMain
     mainArgsValue <- stackFrameGetValue fr (head mainArgs)
     case mainArgsValue of
-        ArrayValue arrV -> do
-            (StringValue aV) <- AR.getArrValue arrV 0
+        V.ArrayValue arrV -> do
+            (V.StringValue aV) <- AR.getArrValue arrV 0
             sV <- SR.stringValue aV
             liftIO $ putStrLn sV
         otherwise  -> liftIO $ putStrLn "Not array value"
@@ -165,9 +166,9 @@ checkFieldValues fieldValues = do
     when (sv /= "fprivate_value")
                     $ throwError $ strMsg "field value not equals fprivate_value"
 
-intValue (IntValue v) = v
+intValue (V.IntValue v) = v
 
-strValue (StringValue sv) = SR.stringValue sv
+strValue (V.StringValue sv) = SR.stringValue sv
 
 getValueOfI curThread = do
     frCnt <- frameCount curThread
