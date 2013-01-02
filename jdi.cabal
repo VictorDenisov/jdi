@@ -41,6 +41,7 @@ Library
                               , Language.Java.Jdi.ThreadGroupReference
                               , Language.Java.Jdi.Field
                               , Language.Java.Jdi.Method
+                              , Language.Java.Jdi.LocalVariable
         build-depends:          base >= 3.0.3.1 && <= 4.5.0.0
                               , containers >= 0.4.2.1
                               , binary >= 0.5.1.0
