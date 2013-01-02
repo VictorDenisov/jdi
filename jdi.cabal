@@ -36,6 +36,7 @@ Library
                               , mtl >= 2.1.2
                               , network >= 2.3.0.14
         other-modules:          Language.Java.Jdwp
+                              , Language.Java.Jdi.Impl
         extensions:             MultiParamTypeClasses
                               , GeneralizedNewtypeDeriving
                               , StandaloneDeriving
