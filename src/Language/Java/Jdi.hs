@@ -6,11 +6,6 @@ module Language.Java.Jdi
 , AllLineLocations(..)
 , StepSize(..)
 , StepDepth(..)
-, Location
-, codeIndex
-, declaringType
-, lineNumber
-, method
 , SuspendPolicy(..)
 ) where
 

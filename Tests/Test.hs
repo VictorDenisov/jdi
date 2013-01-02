@@ -11,6 +11,7 @@ import qualified Language.Java.Jdi.Value as V
 import qualified Language.Java.Jdi.StackFrame as SF
 import qualified Language.Java.Jdi.ThreadReference as TR
 import qualified Language.Java.Jdi.Method as M
+import qualified Language.Java.Jdi.Location as L
 
 import Network.Socket.Internal (PortNumber(..))
 import Network
@@ -180,7 +181,7 @@ getValueOfI curThread = do
     liftIO $ putStrLn $ show fr
     loc <- location fr
     liftIO $ putStrLn $ show loc
-    var <- head <$> M.variablesByName (method loc) "i"
+    var <- head <$> M.variablesByName (L.method loc) "i"
     liftIO $ putStrLn $ show var
     SF.stackFrameGetValue fr var
 
