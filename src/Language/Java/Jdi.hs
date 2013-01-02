@@ -4,8 +4,6 @@ module Language.Java.Jdi
 , Locatable(..)
 , SourceName(..)
 , AllLineLocations(..)
-, StringReference
-, stringValue
 , Value(..)
 , StackFrame
 , stackFrameGetValue

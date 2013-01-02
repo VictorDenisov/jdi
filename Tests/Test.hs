@@ -6,6 +6,7 @@ import qualified Language.Java.Jdi.EventSet as ES
 import qualified Language.Java.Jdi.EventRequest as ER
 import qualified Language.Java.Jdi.ReferenceType as RT
 import qualified Language.Java.Jdi.ArrayReference as AR
+import qualified Language.Java.Jdi.StringReference as SR
 
 import Network.Socket.Internal (PortNumber(..))
 import Network
@@ -113,7 +114,7 @@ body = do
     case mainArgsValue of
         ArrayValue arrV -> do
             (StringValue aV) <- AR.getArrValue arrV 0
-            sV <- stringValue aV
+            sV <- SR.stringValue aV
             liftIO $ putStrLn sV
         otherwise  -> liftIO $ putStrLn "Not array value"
 
@@ -166,7 +167,7 @@ checkFieldValues fieldValues = do
 
 intValue (IntValue v) = v
 
-strValue (StringValue sv) = stringValue sv
+strValue (StringValue sv) = SR.stringValue sv
 
 getValueOfI curThread = do
     frCnt <- frameCount curThread
