@@ -6,7 +6,6 @@ module Language.Java.Jdi
 , AllLineLocations(..)
 , StepSize(..)
 , StepDepth(..)
-, Field
 , Method
 , arguments
 , variables
