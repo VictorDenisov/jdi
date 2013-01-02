@@ -4,6 +4,7 @@ import qualified Language.Java.Jdi.VirtualMachine as Vm
 import qualified Language.Java.Jdi.Event as E
 import qualified Language.Java.Jdi.EventSet as ES
 import qualified Language.Java.Jdi.EventRequest as ER
+import qualified Language.Java.Jdi.ReferenceType as RT
 
 import Network.Socket.Internal (PortNumber(..))
 import Network
@@ -45,12 +46,12 @@ body = do
     threadGroups <- Vm.topLevelThreadGroups
     liftIO . putStrLn $ intercalate "\n" (map show threadGroups)
     let mainClass = head $ filter isMainClass classes
-    fields <- allFields mainClass
+    fields <- RT.allFields mainClass
     when (length fields /= 2) $ liftIO exitFailure
     liftIO . putStrLn $ "Main class fields: " ++ show fields
     sName <- sourceName mainClass
     liftIO . putStrLn $ "Main class source name: " ++ sName
-    methods <- allMethods mainClass
+    methods <- RT.allMethods mainClass
     liftIO . putStrLn $ "Methods for class " ++ (show mainClass)
     liftIO . putStrLn $ intercalate "\n" (map show methods)
     liftIO . putStrLn =<< Vm.vmName
@@ -119,7 +120,7 @@ body = do
     spr <- ER.enable $ (ER.createStepRequest (E.thread ev) StepLine StepOver)
     Vm.resumeVm
     void $ ES.removeEvent
-    fieldValues <- mapM (refTypeGetValue mainClass) fields
+    fieldValues <- mapM (RT.refTypeGetValue mainClass) fields
     checkFieldValues fieldValues
     Vm.resumeVm
     void $ ES.removeEvent
@@ -186,4 +187,4 @@ pollEvents stopFunction = do
         then return e
         else pollEvents stopFunction
 
-isMainClass ref = "LMain;" == genericSignature ref
+isMainClass ref = "LMain;" == RT.genericSignature ref

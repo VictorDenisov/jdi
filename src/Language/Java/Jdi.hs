@@ -4,11 +4,6 @@ module Language.Java.Jdi
 , Locatable(..)
 , SourceName(..)
 , AllLineLocations(..)
-, ReferenceType
-, genericSignature
-, refTypeGetValue
-, allFields
-, allMethods
 , ArrayReference
 , getArrValue
 , getArrValues
