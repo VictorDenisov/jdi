@@ -115,7 +115,7 @@ body = do
     let curThread = E.thread ev
     fr <- head <$> TR.allFrames curThread
     mainArgs <- M.arguments methodMain
-    mainArgsValue <- SF.stackFrameGetValue fr (head mainArgs)
+    mainArgsValue <- SF.getValue fr (head mainArgs)
     case mainArgsValue of
         V.ArrayValue arrV -> do
             (V.StringValue aV) <- AR.getValue arrV 0
@@ -183,7 +183,7 @@ getValueOfI curThread = do
     liftIO $ putStrLn $ show loc
     var <- head <$> M.variablesByName (L.method loc) "i"
     liftIO $ putStrLn $ show var
-    SF.stackFrameGetValue fr var
+    SF.getValue fr var
 
 pollEvents stopFunction = do
     Vm.resumeVm
