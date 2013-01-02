@@ -9,6 +9,7 @@ import qualified Language.Java.Jdi.ArrayReference as AR
 import qualified Language.Java.Jdi.StringReference as SR
 import qualified Language.Java.Jdi.Value as V
 import qualified Language.Java.Jdi.StackFrame as SF
+import qualified Language.Java.Jdi.ThreadReference as TR
 
 import Network.Socket.Internal (PortNumber(..))
 import Network
@@ -110,7 +111,7 @@ body = do
     liftIO . putStrLn $ "Values of args"
 
     let curThread = E.thread ev
-    fr <- head <$> allFrames curThread
+    fr <- head <$> TR.allFrames curThread
     mainArgs <- arguments methodMain
     mainArgsValue <- SF.stackFrameGetValue fr (head mainArgs)
     case mainArgsValue of
@@ -172,9 +173,9 @@ intValue (V.IntValue v) = v
 strValue (V.StringValue sv) = SR.stringValue sv
 
 getValueOfI curThread = do
-    frCnt <- frameCount curThread
+    frCnt <- TR.frameCount curThread
     liftIO $ putStrLn $ "Frame count: " ++ (show frCnt)
-    fr <- head <$> allFrames curThread
+    fr <- head <$> TR.allFrames curThread
     liftIO $ putStrLn $ show fr
     loc <- location fr
     liftIO $ putStrLn $ show loc

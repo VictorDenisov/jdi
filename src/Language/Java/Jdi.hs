@@ -4,10 +4,6 @@ module Language.Java.Jdi
 , Locatable(..)
 , SourceName(..)
 , AllLineLocations(..)
-, ThreadReference
-, allFrames
-, frameCount
-, frames
 , ThreadGroupReference
 , StepSize(..)
 , StepDepth(..)
