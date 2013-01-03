@@ -808,6 +808,9 @@ getFrames tr@(J.ThreadReference ti) start len = do
 data Field = Field J.ReferenceType J.Field
               deriving (Eq, Show)
 
+instance Name Field  where
+    name (Field _ (J.Field _ nm _ _)) = return nm
+
 -- }}}
 
 -- Method functions section {{{

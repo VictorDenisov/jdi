@@ -55,7 +55,7 @@ body = do
     liftIO . putStrLn $ intercalate "\n" (map show threadGroups)
     let mainClass = head $ filter isMainClass classes
     fields <- RT.allFields mainClass
-    when (length fields /= 2) $ liftIO exitFailure
+    checkFieldsNames fields
     liftIO . putStrLn $ "Main class fields: " ++ show fields
     sName <- sourceName mainClass
     liftIO . putStrLn $ "Main class source name: " ++ sName
@@ -162,6 +162,13 @@ body = do
         E.VmDeath -> True
         _ -> False
     liftIO . putStrLn $ "Exiting"
+
+checkFieldsNames fields = do
+    when (length fields /= 2) $ liftIO exitFailure
+    f1name <- name (fields !! 0)
+    f2name <- name (fields !! 1)
+    when (f1name /= "f1") $ liftIO exitFailure
+    when (f2name /= "fprivate") $ liftIO exitFailure
 
 checkFieldValues fieldValues = do
     liftIO . putStrLn $ "Main class field values: " ++ show fieldValues
