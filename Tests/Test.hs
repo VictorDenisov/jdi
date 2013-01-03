@@ -1,4 +1,5 @@
 module Main where
+
 import Language.Java.Jdi
 import qualified Language.Java.Jdi.VirtualMachine as Vm
 import qualified Language.Java.Jdi.Event as E
@@ -61,7 +62,7 @@ body = do
     methods <- RT.allMethods mainClass
     liftIO . putStrLn $ "Methods for class " ++ (show mainClass)
     liftIO . putStrLn $ intercalate "\n" (map show methods)
-    liftIO . putStrLn =<< Vm.vmName
+    liftIO . putStrLn =<< Vm.name
     liftIO . putStrLn =<< (name $ head methods)
     forM_ threads (\thread -> liftIO . putStrLn =<< name thread)
     let isMainMethod = (liftM ("main" ==)) . name
@@ -125,15 +126,15 @@ body = do
 
 
     spr <- ER.enable $ (ER.createStepRequest (E.thread ev) StepLine StepOver)
-    Vm.resumeVm
+    Vm.resume
     void $ ES.removeEvent
     fieldValues <- mapM (RT.getValue mainClass) fields
     checkFieldValues fieldValues
-    Vm.resumeVm
+    Vm.resume
     void $ ES.removeEvent
 
     liftIO . putStrLn $ "trying step requests"
-    Vm.resumeVm
+    Vm.resume
     es0 <- ES.removeEvent
     let e0 = head $ ES.events es0
     liftIO $ putStrLn $ show e0
@@ -144,9 +145,9 @@ body = do
      `catchError`
         (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
 
-    Vm.resumeVm
+    Vm.resume
     void $ ES.removeEvent
-    Vm.resumeVm
+    Vm.resume
     es1 <- ES.removeEvent
     let e1 = head $ ES.events es1
     liftIO $ putStrLn $ show e1
@@ -186,7 +187,7 @@ getValueOfI curThread = do
     SF.getValue fr var
 
 pollEvents stopFunction = do
-    Vm.resumeVm
+    Vm.resume
     es <- ES.removeEvent
     liftIO $ putStrLn $ show es
     let e = head $ ES.events es
