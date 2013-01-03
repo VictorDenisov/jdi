@@ -30,6 +30,7 @@ module Language.Java.Jdi.Impl
 , dispose
 , exit
 , resumeVm
+, suspendVm
 , topLevelThreadGroups
 , J.Event
 , referenceType
@@ -452,6 +453,16 @@ resumeVm = do
     liftIO $ J.sendPacket h $ J.resumeVmCommand cntr
     r <- liftIO $ J.waitReply h
     return ()
+
+{- | Suspends the execution of the application running in this virtual machine.
+All threads currently running will be suspended.
+
+Unlike Thread.suspend(), suspends of both the virtual machine and individual
+threads are counted. Before a thread will run again, it must be resumed (through
+resume() or ThreadReference.resume()) the same number of times it has been
+suspended. -}
+suspendVm :: (Error e, MonadIO m, MonadError e m) => VirtualMachine m ()
+suspendVm = runCommand J.suspendVmCommand >> return ()
 
 -- | Returns each thread group which does not have a parent.
 topLevelThreadGroups :: MonadIO m => VirtualMachine m [J.ThreadGroupReference]

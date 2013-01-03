@@ -991,6 +991,9 @@ disposeCommand packetId = CommandPacket 11 packetId 0 1 6 B.empty
 idSizesCommand :: PacketId -> Packet
 idSizesCommand packetId = CommandPacket 11 packetId 0 1 7 B.empty
 
+suspendVmCommand :: PacketId -> Packet
+suspendVmCommand packetId = CommandPacket 11 packetId 0 1 8 B.empty
+
 resumeVmCommand :: PacketId -> Packet
 resumeVmCommand packetId = CommandPacket 11 packetId 0 1 9 B.empty
 
@@ -1000,6 +1003,9 @@ exitCommand packetId exitCode =
 
 capabilitiesCommand :: PacketId -> Packet
 capabilitiesCommand packetId = CommandPacket 11 packetId 0 1 12 B.empty
+
+classPathsCommand :: PacketId -> Packet
+classPathsCommand packetId = CommandPacket 11 packetId 0 1 13 B.empty
 
 capabilitiesNewCommand :: PacketId -> Packet
 capabilitiesNewCommand packetId = CommandPacket 11 packetId 0 1 17 B.empty
