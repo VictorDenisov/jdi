@@ -93,9 +93,9 @@ type JavaClassId         = JavaReferenceTypeId
 data JavaFieldId         = JavaFieldId JavaInt Word64 deriving (Show, Eq)
 data JavaMethodId        = JavaMethodId JavaInt Word64 deriving (Show, Eq)
 data JavaObjectId        = JavaObjectId JavaInt Word64 deriving (Show, Eq)
-data JavaReferenceTypeId = JavaReferenceTypeId JavaInt Word64 -- size value
-                           deriving (Show, Eq)
+type JavaReferenceTypeId = JavaObjectId
 data JavaFrameId         = JavaFrameId JavaInt Word64 deriving (Show, Eq)
+type JavaInterfaceId     = JavaReferenceTypeId
 
 data JavaLocation = JavaLocation
                   { typeTag :: TypeTag
@@ -191,10 +191,10 @@ parseObjectId s = JavaObjectId s <$> parseDynamicSizedValue s
 
 --- ReferenceType id marshalling funcitons
 putReferenceTypeId :: JavaReferenceTypeId -> Put
-putReferenceTypeId (JavaReferenceTypeId size v) = putDynamicSizedValue size v
+putReferenceTypeId (JavaObjectId size v) = putDynamicSizedValue size v
 
 parseReferenceTypeId :: JavaInt -> Get JavaReferenceTypeId
-parseReferenceTypeId s = JavaReferenceTypeId s <$> parseDynamicSizedValue s
+parseReferenceTypeId s = JavaObjectId s <$> parseDynamicSizedValue s
 
 --- Frame id marshalling funcitons
 putFrameId :: JavaFrameId -> Put
@@ -519,12 +519,12 @@ lengthOfEventModifier :: EventModifier -> Word32
 lengthOfEventModifier (Count _) = 1 + 4
 lengthOfEventModifier (Conditional _) = 1 + 4
 lengthOfEventModifier (ThreadOnly (JavaObjectId l v)) = 1 + l
-lengthOfEventModifier (ClassOnly (JavaReferenceTypeId l v)) = 1 + l
+lengthOfEventModifier (ClassOnly (JavaObjectId l v)) = 1 + l
 lengthOfEventModifier (ClassMatch s) = 1 + 4 + fromIntegral (length s)
 lengthOfEventModifier (ClassExclude s) = 1 + 4 + fromIntegral (length s)
 lengthOfEventModifier (LocationOnly
                             (JavaLocation _
-                                          (JavaReferenceTypeId refSize _)
+                                          (JavaObjectId refSize _)
                                           (JavaMethodId mSize _)
                                           _
                             )
@@ -846,6 +846,11 @@ parseClassesBySignatureReply idsizes = do
     classCount <- parseInt
     mapM (\_ -> parseReferenceTypeNoSignature idsizes) [1..classCount]
 
+parseInterfacesReply :: IdSizes -> Get [JavaInterfaceId]
+parseInterfacesReply idsizes = do
+    interfaceCount <- parseInt
+    mapM (\_ -> parseReferenceTypeId $ referenceTypeIdSize idsizes) [1..interfaceCount]
+
 parseThreadReference :: IdSizes -> Get ThreadReference
 parseThreadReference idsizes =
     ThreadReference <$> (parseThreadId $ threadIdSize idsizes)
@@ -1013,42 +1018,42 @@ capabilitiesNewCommand packetId = CommandPacket 11 packetId 0 1 17 B.empty
 
 -- ReferenceType command set. (2) {{{
 signatureCommand :: JavaReferenceTypeId -> PacketId -> Packet
-signatureCommand typeId@(JavaReferenceTypeId rSize _) packetId =
+signatureCommand typeId@(JavaObjectId rSize _) packetId =
     CommandPacket
         (11 + rSize)
         packetId 0 2 1
         (toStrict $ runPut $ putReferenceTypeId typeId)
 
 classLoaderCommand :: JavaReferenceTypeId -> PacketId -> Packet
-classLoaderCommand typeId@(JavaReferenceTypeId rSize _) packetId =
+classLoaderCommand typeId@(JavaObjectId rSize _) packetId =
     CommandPacket
         (11 + rSize)
         packetId 0 2 2
         (toStrict $ runPut $ putReferenceTypeId typeId)
 
 modifiersCommand :: JavaReferenceTypeId -> PacketId -> Packet
-modifiersCommand typeId@(JavaReferenceTypeId rSize _) packetId =
+modifiersCommand typeId@(JavaObjectId rSize _) packetId =
     CommandPacket
         (11 + rSize)
         packetId 0 2 3
         (toStrict $ runPut $ putReferenceTypeId typeId)
 
 fieldsCommand :: JavaReferenceTypeId -> PacketId -> Packet
-fieldsCommand typeId@(JavaReferenceTypeId rSize _) packetId =
+fieldsCommand typeId@(JavaObjectId rSize _) packetId =
     CommandPacket
         (11 + rSize)
         packetId 0 2 4
         (toStrict $ runPut $ putReferenceTypeId typeId)
 
 methodsCommand :: JavaReferenceTypeId -> PacketId -> Packet
-methodsCommand typeId@(JavaReferenceTypeId size _) packetId =
+methodsCommand typeId@(JavaObjectId size _) packetId =
     CommandPacket
         (11 + size)
         packetId 0 2 5
         (toStrict $ runPut $ putReferenceTypeId typeId)
 
 refGetValuesCommand :: JavaReferenceTypeId -> [Field] -> PacketId -> Packet
-refGetValuesCommand typeId@(JavaReferenceTypeId size _) fs packetId =
+refGetValuesCommand typeId@(JavaObjectId size _) fs packetId =
     CommandPacket
         (11 + size + 4 + len fs * fieldSize fs)
         packetId 0 2 6
@@ -1064,7 +1069,7 @@ refGetValuesCommand typeId@(JavaReferenceTypeId size _) fs packetId =
 
 sourceFileCommand :: JavaReferenceTypeId -> PacketId -> Packet
 sourceFileCommand
-                typeId@(JavaReferenceTypeId rSize _)
+                typeId@(JavaObjectId rSize _)
                 packetId =
     CommandPacket
         (11 + rSize)
@@ -1072,10 +1077,19 @@ sourceFileCommand
         (toStrict $ runPut $ putReferenceTypeId typeId)
 
 statusCommand :: JavaReferenceTypeId -> PacketId -> Packet
-statusCommand typeId@(JavaReferenceTypeId rSize _) packetId =
+statusCommand typeId@(JavaObjectId rSize _) packetId =
     CommandPacket
         (11 + rSize)
         packetId 0 2 9
+        (toStrict $ runPut $ putReferenceTypeId typeId)
+
+interfacesCommand :: JavaReferenceTypeId -> PacketId -> Packet
+interfacesCommand
+        typeId@(JavaObjectId rSize _)
+        packetId =
+    CommandPacket
+        (11 + rSize)
+        packetId 0 2 10
         (toStrict $ runPut $ putReferenceTypeId typeId)
 
 -- }}}
@@ -1083,7 +1097,7 @@ statusCommand typeId@(JavaReferenceTypeId rSize _) packetId =
 -- Method command set. (6) {{{
 lineTableCommand :: JavaReferenceTypeId -> JavaMethodId -> PacketId -> Packet
 lineTableCommand
-            typeId@(JavaReferenceTypeId rSize _)
+            typeId@(JavaObjectId rSize _)
             methodId@(JavaMethodId mSize _)
             packetId =
     CommandPacket
@@ -1096,7 +1110,7 @@ variableTableCommand :: JavaReferenceTypeId
                      -> JavaMethodId
                      -> PacketId
                      -> Packet
-variableTableCommand refId@(JavaReferenceTypeId rSize _)
+variableTableCommand refId@(JavaObjectId rSize _)
                      mId@(JavaMethodId mSize _)
                      packetId =
     CommandPacket

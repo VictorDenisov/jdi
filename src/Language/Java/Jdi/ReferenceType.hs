@@ -4,6 +4,7 @@ module Language.Java.Jdi.ReferenceType
 , getValue
 , fields
 , allMethods
+, interfaces
 ) where
 
 import Language.Java.Jdi.Impl

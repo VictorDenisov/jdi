@@ -51,6 +51,7 @@ module Language.Java.Jdi.Impl
 , refTypeGetValue
 , fields
 , allMethods
+, interfaces
 , J.ArrayReference
 , getArrValue
 , getArrValues
@@ -666,6 +667,16 @@ instance SourceName J.ReferenceType where
 instance AllLineLocations J.ReferenceType where
     allLineLocations refType = concat `liftM` ((mapM allLineLocations) =<< (allMethods refType))
 
+-- TODO i'm not sure how it works for other than interfaces.
+interfaces :: (Error e, MonadIO m, MonadError e m) =>
+              J.ReferenceType -> VirtualMachine m [J.ReferenceType]
+interfaces (J.ReferenceType _ refId _ _) = do
+    reply <- runCommand $ J.interfacesCommand refId
+    let r = J.dat reply
+    idsizes <- getIdSizes
+    let interfaceIds = runGet (J.parseInterfacesReply idsizes) (J.toLazy r)
+    mapM (referenceTypeFromRefId J.Interface) interfaceIds
+
 -- }}}
 
 -- ArrayReference functions section {{{
@@ -905,7 +916,7 @@ resumeThreadId :: (Error e, MonadIO m, MonadError e m) => J.JavaThreadId -> Virt
 resumeThreadId tId = runCommand (J.resumeThreadCommand tId) >> return ()
 
 referenceTypeFromRefId :: (Error e, MonadIO m, MonadError e m) =>
-                          J.TypeTag -> J.JavaClassId -> VirtualMachine m J.ReferenceType
+                          J.TypeTag -> J.JavaReferenceTypeId -> VirtualMachine m J.ReferenceType
 referenceTypeFromRefId typeTag refId = do
     reply <- runCommand $ J.signatureCommand refId
     let csr = J.dat reply

@@ -1,4 +1,4 @@
-public class Main {
+public class Main implements Runnable {
     static public int f1 = 10;
     static private String fprivate = "fprivate_value";
 
@@ -16,5 +16,8 @@ public class Main {
         int internalVariable1 = 1;
         System.out.println("Hello afterInternal1" + internalVariable1);
         return "";
+    }
+
+    public void run() {
     }
 }
