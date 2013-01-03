@@ -445,14 +445,8 @@ exit exitCode = do
     return ()
 
 -- | Continues the execution of the application running in this virtual machine.
-resumeVm :: MonadIO m => VirtualMachine m ()
-resumeVm = do
-    h <- getVmHandle
-    cntr <- yieldPacketIdCounter
-    idsizes <- getIdSizes
-    liftIO $ J.sendPacket h $ J.resumeVmCommand cntr
-    r <- liftIO $ J.waitReply h
-    return ()
+resumeVm :: (Error e, MonadIO m, MonadError e m) => VirtualMachine m ()
+resumeVm = runCommand J.resumeVmCommand >> return ()
 
 {- | Suspends the execution of the application running in this virtual machine.
 All threads currently running will be suspended.

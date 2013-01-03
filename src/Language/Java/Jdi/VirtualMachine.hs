@@ -36,7 +36,7 @@ import Control.Monad.Error (ErrorT, runErrorT, MonadError(..), Error(..))
 name :: MonadIO m => VirtualMachine m String
 name = vmName
 
-resume :: MonadIO m => VirtualMachine m ()
+resume :: (Error e, MonadIO m, MonadError e m) => VirtualMachine m ()
 resume = resumeVm
 
 suspend :: (Error e, MonadIO m, MonadError e m) => VirtualMachine m ()
