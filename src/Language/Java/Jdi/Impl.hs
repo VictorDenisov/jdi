@@ -49,7 +49,7 @@ module Language.Java.Jdi.Impl
 , J.ReferenceType
 , genericSignature
 , refTypeGetValue
-, allFields
+, fields
 , allMethods
 , J.ArrayReference
 , getArrValue
@@ -629,9 +629,15 @@ refTypeGetValue (J.ReferenceType _ ri _ _) (Field _ f)= do
                         (J.parseGetValuesReply idsizes)
                         (J.toLazy $ J.dat reply)
 
-allFields :: (Error e, MonadIO m, MonadError e m) =>
+{- | Returns a list containing each Field declared in this type. Inherited
+fields are not included. Any synthetic fields created by the compiler are
+included in the list.
+
+For arrays (ArrayType) and primitive classes, the returned list is always empty.
+-}
+fields :: (Error e, MonadIO m, MonadError e m) =>
              J.ReferenceType -> VirtualMachine m [Field]
-allFields rt@(J.ReferenceType _ refId _ _) = do
+fields rt@(J.ReferenceType _ refId _ _) = do
     idsizes <- getIdSizes
     reply <- runCommand $ J.fieldsCommand refId
     let r = J.dat reply

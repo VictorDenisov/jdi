@@ -2,7 +2,7 @@ module Language.Java.Jdi.ReferenceType
 ( ReferenceType
 , genericSignature
 , getValue
-, allFields
+, fields
 , allMethods
 ) where
 

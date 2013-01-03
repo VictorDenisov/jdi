@@ -54,7 +54,7 @@ body = do
     threadGroups <- Vm.topLevelThreadGroups
     liftIO . putStrLn $ intercalate "\n" (map show threadGroups)
     let mainClass = head $ filter isMainClass classes
-    fields <- RT.allFields mainClass
+    fields <- RT.fields mainClass
     checkFieldsNames fields
     liftIO . putStrLn $ "Main class fields: " ++ show fields
     sName <- sourceName mainClass
