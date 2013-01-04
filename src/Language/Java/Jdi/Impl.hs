@@ -50,7 +50,7 @@ module Language.Java.Jdi.Impl
 , genericSignature
 , refTypeGetValue
 , fields
-, allMethods
+, methods
 , interfaces
 , J.ArrayReference
 , getArrValue
@@ -645,9 +645,9 @@ fields rt@(J.ReferenceType _ refId _ _) = do
     let fields = runGet (J.parseFieldsReply idsizes) (J.toLazy r)
     return $ map (Field rt) fields
 
-allMethods :: (Error e, MonadIO m, MonadError e m) =>
+methods :: (Error e, MonadIO m, MonadError e m) =>
               J.ReferenceType -> VirtualMachine m [Method]
-allMethods rt@(J.ReferenceType _ refId _ _) = do
+methods rt@(J.ReferenceType _ refId _ _) = do
     idsizes <- getIdSizes
     reply <- runCommand $ J.methodsCommand refId
     let r = J.dat reply
@@ -665,7 +665,7 @@ instance SourceName J.ReferenceType where
         return sourceName
 
 instance AllLineLocations J.ReferenceType where
-    allLineLocations refType = concat `liftM` ((mapM allLineLocations) =<< (allMethods refType))
+    allLineLocations refType = concat `liftM` ((mapM allLineLocations) =<< (methods refType))
 
 -- TODO i'm not sure how it works for other than interfaces.
 interfaces :: (Error e, MonadIO m, MonadError e m) =>
@@ -930,7 +930,7 @@ locationFromJavaLocation :: (Error e, MonadIO m, MonadError e m) =>
                             J.JavaLocation -> VirtualMachine m Location
 locationFromJavaLocation (J.JavaLocation typeTag refId methodId index) = do
     rt <- referenceTypeFromRefId typeTag refId
-    methodList <- allMethods rt
+    methodList <- methods rt
     let (Just method) = find isMyMethod methodList
     al <- allLineLocations method
     return $ last $ filter (lessThanIndex index) al

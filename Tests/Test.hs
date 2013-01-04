@@ -61,7 +61,7 @@ body = do
     liftIO . putStrLn $ "Main class source name: " ++ sName
     mainClassInterfaces <- RT.interfaces mainClass
     liftIO . putStrLn $ "Main class interfaces: " ++ show mainClassInterfaces
-    methods <- RT.allMethods mainClass
+    methods <- RT.methods mainClass
     liftIO . putStrLn $ "Methods for class " ++ (show mainClass)
     liftIO . putStrLn $ intercalate "\n" (map show methods)
     liftIO . putStrLn =<< Vm.name

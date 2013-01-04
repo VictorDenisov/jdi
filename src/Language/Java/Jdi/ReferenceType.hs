@@ -3,7 +3,7 @@ module Language.Java.Jdi.ReferenceType
 , genericSignature
 , getValue
 , fields
-, allMethods
+, methods
 , interfaces
 ) where
 
