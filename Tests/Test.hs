@@ -11,6 +11,7 @@ import qualified Language.Java.Jdi.StringReference as SR
 import qualified Language.Java.Jdi.Value as V
 import qualified Language.Java.Jdi.StackFrame as SF
 import qualified Language.Java.Jdi.ThreadReference as TR
+import qualified Language.Java.Jdi.ThreadGroupReference as TG
 import qualified Language.Java.Jdi.Method as M
 import qualified Language.Java.Jdi.Location as L
 
@@ -117,6 +118,7 @@ body = do
     ev <- pollEvents $ \e -> case E.eventKind e of
         E.Breakpoint -> True
         _ -> False
+    printThreadTree
     liftIO . putStrLn $ "breakpoint stopped at location"
     liftIO . putStrLn $ show methodMain
     loc <- location ev
@@ -172,6 +174,25 @@ body = do
         E.VmDeath -> True
         _ -> False
     liftIO . putStrLn $ "Exiting"
+
+printThreadTree = do
+    liftIO $ putStrLn "========== Thread Tree ==========="
+    tgs <- Vm.topLevelThreadGroups
+    mapM (printThreadGroup 0) tgs
+    liftIO $ putStrLn "========== ----------- ==========="
+
+printThreadGroup depth tg = do
+    let is = "   "
+    let indent = concat $ replicate depth is
+    tgName <- name tg
+    liftIO $ putStrLn $ indent ++ "Thread group: " ++ tgName
+
+    liftIO $ putStrLn $ indent ++ is ++ "Threads: "
+    ts <- mapM name =<< (TG.threads tg)
+    liftIO $ putStrLn $ intercalate "\n" $ map ((indent ++ is ++ is) ++ ) ts
+
+    mapM (printThreadGroup $ depth + 1) =<< TG.threadGroups tg
+    return ()
 
 checkFieldsNames fields = do
     when (length fields /= 2) $ liftIO exitFailure

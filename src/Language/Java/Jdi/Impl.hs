@@ -66,7 +66,11 @@ module Language.Java.Jdi.Impl
 , allFrames
 , frameCount
 , frames
+, threadGroup
 , J.ThreadGroupReference
+, parent
+, threadGroups
+, threads
 , J.StepSize(..)
 , J.StepDepth(..)
 , Field
@@ -461,13 +465,12 @@ suspendVm :: (Error e, MonadIO m, MonadError e m) => VirtualMachine m ()
 suspendVm = runCommand J.suspendVmCommand >> return ()
 
 -- | Returns each thread group which does not have a parent.
-topLevelThreadGroups :: MonadIO m => VirtualMachine m [J.ThreadGroupReference]
+topLevelThreadGroups :: (Error e, MonadIO m, MonadError e m)
+                     => VirtualMachine m [J.ThreadGroupReference]
 topLevelThreadGroups = do
-    h <- getVmHandle
-    cntr <- yieldPacketIdCounter
+    reply <- runCommand J.topLevelThreadGroupsCommand
+    let r = J.dat reply
     idsizes <- getIdSizes
-    liftIO $ J.sendPacket h $ J.topLevelThreadGroupsCommand cntr
-    r <- J.dat `liftM` (liftIO $ J.waitReply h)
     let groups = runGet (J.parseThreadGroupsReply idsizes) (J.toLazy r)
     return groups
 
@@ -828,6 +831,56 @@ getFrames tr@(J.ThreadReference ti) start len = do
     reply <- runCommand $ J.framesCommand ti (fromIntegral start) (fromIntegral len)
     let r = J.dat reply
     return $ map (StackFrame tr) $ runGet (J.parseStackFrameList idsizes) (J.toLazy r)
+
+threadGroup :: (Error e, MonadIO m, MonadError e m)
+            => J.ThreadReference -> VirtualMachine m J.ThreadGroupReference
+threadGroup tr@(J.ThreadReference ti) = do
+    idsizes <- getIdSizes
+    reply <- runCommand $ J.threadGroupCommand ti
+    let r = J.dat reply
+    return $ runGet (J.parseThreadGroupReference idsizes) (J.toLazy r)
+
+-- }}}
+
+-- ThreadGroupReference functions section {{{
+
+instance Name J.ThreadGroupReference where
+    name (J.ThreadGroupReference refId) = do
+        reply <- runCommand $ J.threadGroupReferenceNameCommand refId
+        let r = J.dat reply
+        return $ runGet J.parseString (J.toLazy r)
+
+parent :: (Error e, MonadIO m, MonadError e m)
+       => J.ThreadGroupReference -> VirtualMachine m J.ThreadGroupReference
+parent (J.ThreadGroupReference refId) = do
+    reply <- runCommand $ J.threadGroupReferenceParentCommand refId
+    let r = J.dat reply
+    idsizes <- getIdSizes
+    return $ runGet (J.parseThreadGroupReference idsizes) (J.toLazy r)
+
+threadGroups :: (Error e, MonadIO m, MonadError e m)
+             => J.ThreadGroupReference
+             -> VirtualMachine m [J.ThreadGroupReference]
+threadGroups (J.ThreadGroupReference refId) = do
+    reply <- runCommand $ J.threadGroupReferenceChildrenCommand refId
+    let r = J.dat reply
+    idsizes <- getIdSizes
+    let (_, groups) = runGet
+                        (J.parseThreadGroupChildrenReply idsizes)
+                        (J.toLazy r)
+    return groups
+
+threads :: (Error e, MonadIO m, MonadError e m)
+             => J.ThreadGroupReference
+             -> VirtualMachine m [J.ThreadReference]
+threads (J.ThreadGroupReference refId) = do
+    reply <- runCommand $ J.threadGroupReferenceChildrenCommand refId
+    let r = J.dat reply
+    idsizes <- getIdSizes
+    let (ts, _) = runGet
+                        (J.parseThreadGroupChildrenReply idsizes)
+                        (J.toLazy r)
+    return ts
 
 -- }}}
 

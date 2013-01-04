@@ -869,6 +869,14 @@ parseThreadGroupsReply idsizes = do
     groupCount <- parseInt
     mapM (\_ -> parseThreadGroupReference idsizes) [1..groupCount]
 
+parseThreadGroupChildrenReply :: IdSizes
+                              -> Get ( [ThreadReference]
+                                     , [ThreadGroupReference])
+parseThreadGroupChildrenReply idsizes = do
+    thread <- parseAllThreadsReply idsizes
+    threadGroups <- parseThreadGroupsReply idsizes
+    return (thread, threadGroups)
+
 parseLineTableReply :: Get LineTable
 parseLineTableReply = do
     start <- parseLong
@@ -1157,6 +1165,14 @@ resumeThreadCommand threadId packetId =
         0 11 3
         (toStrict $ runPut $ putThreadId threadId)
 
+threadGroupCommand :: JavaThreadId -> PacketId -> Packet
+threadGroupCommand threadId@(JavaObjectId s _) packetId =
+    CommandPacket
+        (11 + s)
+        packetId
+        0 11 5
+        (toStrict $ runPut $ putThreadId threadId)
+
 framesCommand :: JavaThreadId -> JavaInt -> JavaInt -> PacketId -> Packet
 framesCommand threadId@(JavaObjectId s _) startFrame len packetId =
     CommandPacket
@@ -1173,6 +1189,28 @@ frameCountCommand threadId@(JavaObjectId s _) packetId =
         (11 + s)
         packetId 0 11 7
         (toStrict $ runPut $ putThreadId threadId)
+-- }}}
+
+-- ThreadGroupReference command set. (12) {{{
+
+threadGroupReferenceNameCommand tgi@(JavaObjectId size _) packetId =
+    CommandPacket
+        (11 + size)
+        packetId 0 12 1
+        (toStrict $ runPut $ putThreadGroupId tgi)
+
+threadGroupReferenceParentCommand tgi@(JavaObjectId size _) packetId =
+    CommandPacket
+        (11 + size)
+        packetId 0 12 2
+        (toStrict $ runPut $ putThreadGroupId tgi)
+
+threadGroupReferenceChildrenCommand tgi@(JavaObjectId size _) packetId =
+    CommandPacket
+        (11 + size)
+        packetId 0 12 3
+        (toStrict $ runPut $ putThreadGroupId tgi)
+
 -- }}}
 
 -- ArrayReference command set. (13) {{{
