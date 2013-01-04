@@ -52,6 +52,7 @@ module Language.Java.Jdi.Impl
 , fields
 , methods
 , interfaces
+, superclass
 , J.ArrayReference
 , getArrValue
 , getArrValues
@@ -676,6 +677,16 @@ interfaces (J.ReferenceType _ refId _ _) = do
     idsizes <- getIdSizes
     let interfaceIds = runGet (J.parseInterfacesReply idsizes) (J.toLazy r)
     mapM (referenceTypeFromRefId J.Interface) interfaceIds
+
+-- | Doesn't work for ReferenceTypes that are interfaces.
+superclass (J.ReferenceType _ refId _ _) = do
+    reply <- runCommand $ J.superclassCommand refId
+    let r = J.dat reply
+    idsizes <- getIdSizes
+    let subRefId = runGet
+                (J.parseReferenceTypeId $ J.referenceTypeIdSize idsizes)
+                (J.toLazy r)
+    referenceTypeFromRefId J.Class subRefId
 
 -- }}}
 

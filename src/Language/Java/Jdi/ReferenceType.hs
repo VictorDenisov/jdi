@@ -5,6 +5,7 @@ module Language.Java.Jdi.ReferenceType
 , fields
 , methods
 , interfaces
+, superclass
 ) where
 
 import Language.Java.Jdi.Impl

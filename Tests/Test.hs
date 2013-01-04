@@ -61,6 +61,9 @@ body = do
     liftIO . putStrLn $ "Main class source name: " ++ sName
     mainClassInterfaces <- RT.interfaces mainClass
 
+    mainSuper <- RT.superclass mainClass
+    liftIO . putStrLn $ "Super classs of main class: " ++ show mainSuper
+
     let oneInterface = head mainClassInterfaces
     otherInterfaces <- RT.interfaces oneInterface
 

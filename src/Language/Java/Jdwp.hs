@@ -1094,6 +1094,19 @@ interfacesCommand
 
 -- }}}
 
+-- ClassType command set. (3) {{{
+
+superclassCommand :: JavaReferenceTypeId -> PacketId -> Packet
+superclassCommand
+        typeId@(JavaObjectId rSize _)
+        packetId =
+    CommandPacket
+        (11 + rSize)
+        packetId 0 3 1
+        (toStrict $ runPut $ putReferenceTypeId typeId)
+
+-- }}}
+
 -- Method command set. (6) {{{
 lineTableCommand :: JavaReferenceTypeId -> JavaMethodId -> PacketId -> Packet
 lineTableCommand
