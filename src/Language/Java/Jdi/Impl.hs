@@ -667,7 +667,7 @@ instance SourceName J.ReferenceType where
 instance AllLineLocations J.ReferenceType where
     allLineLocations refType = concat `liftM` ((mapM allLineLocations) =<< (methods refType))
 
--- TODO i'm not sure how it works for other than interfaces.
+-- For interfaces returns interfaces extended by this interface.
 interfaces :: (Error e, MonadIO m, MonadError e m) =>
               J.ReferenceType -> VirtualMachine m [J.ReferenceType]
 interfaces (J.ReferenceType _ refId _ _) = do

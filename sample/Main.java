@@ -1,4 +1,7 @@
-public class Main implements Runnable {
+import java.util.concurrent.RunnableFuture;
+import java.util.concurrent.TimeUnit;
+
+public class Main implements RunnableFuture<String> {
     static public int f1 = 10;
     static private String fprivate = "fprivate_value";
 
@@ -19,5 +22,25 @@ public class Main implements Runnable {
     }
 
     public void run() {
+    }
+
+    public boolean cancel(boolean v) {
+        return true;
+    }
+
+    public boolean isCancelled() {
+        return true;
+    }
+
+    public boolean isDone() {
+        return true;
+    }
+
+    public String get() {
+        return "";
+    }
+
+    public String get(long timeout, TimeUnit unit) {
+        return "";
     }
 }

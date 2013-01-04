@@ -60,6 +60,11 @@ body = do
     sName <- sourceName mainClass
     liftIO . putStrLn $ "Main class source name: " ++ sName
     mainClassInterfaces <- RT.interfaces mainClass
+
+    let oneInterface = head mainClassInterfaces
+    otherInterfaces <- RT.interfaces oneInterface
+
+    liftIO . putStrLn $ "Other interfaces: " ++ show otherInterfaces
     liftIO . putStrLn $ "Main class interfaces: " ++ show mainClassInterfaces
     methods <- RT.methods mainClass
     liftIO . putStrLn $ "Methods for class " ++ (show mainClass)
