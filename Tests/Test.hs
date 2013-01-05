@@ -188,8 +188,12 @@ printThreadGroup depth tg = do
     liftIO $ putStrLn $ indent ++ "Thread group: " ++ tgName
 
     liftIO $ putStrLn $ indent ++ is ++ "Threads: "
-    ts <- mapM name =<< (TG.threads tg)
-    liftIO $ putStrLn $ intercalate "\n" $ map ((indent ++ is ++ is) ++ ) ts
+    trds <- TG.threads tg
+    tstats <- mapM ((show <$>) . TR.status) trds
+    tsusps <- mapM ((show <$>) . TR.isSuspended) trds
+    ts <- mapM name trds
+    let threadStrings = zipWith3 (\a b c -> a ++ " " ++ b ++ " " ++ c) ts tstats tsusps
+    liftIO $ putStrLn $ intercalate "\n" $ map ((indent ++ is ++ is) ++ ) threadStrings
 
     mapM (printThreadGroup $ depth + 1) =<< TG.threadGroups tg
     return ()

@@ -424,6 +424,17 @@ data Tag = ArrayTag
 newtype ClassStatus = ClassStatus JavaInt
                       deriving (Eq, Show)
 
+data ThreadStatus = Zombie
+                  | Running
+                  | Sleeping
+                  | Monitor
+                  | Wait
+                    deriving (Eq, Show)
+
+data SuspendStatus = Resumed
+                   | Suspended
+                     deriving (Eq, Show)
+
 data ReferenceType = ReferenceType
                             TypeTag
                             JavaReferenceTypeId
@@ -532,18 +543,31 @@ lengthOfEventModifier (LocationOnly
 lengthOfEventModifier (Step (JavaObjectId l v) _ _) = 1 + l + 4 + 4
 lengthOfEventModifier _ = error "unhandled size yet"
 
-fromNumber :: [(JavaByte, a)] -> JavaByte -> a
+fromNumber :: (Eq n, Show n) => [(n, a)] -> n -> a
 fromNumber list n =
     case find ((== n) . fst) list of
         Just (_, v)  -> v
         Nothing ->
             error $ "Number " ++ show n ++ " doesn't match any value from list"
 
-toNumber :: (Eq a, Show a) => [(JavaByte, a)] -> a -> JavaByte
+toNumber :: (Eq a, Show a) => [(n, a)] -> a -> n
 toNumber list e =
     case find ((== e) . snd) list of
         Just (n, _) -> n
         Nothing     -> error $ "list doesn't have value " ++ show e
+
+threadStatusNumbers :: [(JavaInt, ThreadStatus)]
+threadStatusNumbers = [ (0, Zombie)
+                      , (1, Running)
+                      , (2, Sleeping)
+                      , (3, Monitor)
+                      , (4, Wait)
+                      ]
+
+suspendStatusNumbers :: [(JavaInt, SuspendStatus)]
+suspendStatusNumbers = [ (0, Resumed)
+                       , (1, Suspended)
+                       ]
 
 eventKindNumbers :: [(JavaByte, EventKind)]
 eventKindNumbers = [ (  1, SingleStep)
@@ -877,6 +901,14 @@ parseThreadGroupChildrenReply idsizes = do
     threadGroups <- parseThreadGroupsReply idsizes
     return (thread, threadGroups)
 
+parseThreadStatusReply :: Get (ThreadStatus, SuspendStatus)
+parseThreadStatusReply = do
+    ts <- parseInt
+    ss <- parseInt
+    let threadStatus = fromNumber threadStatusNumbers ts
+    let suspendStatus = fromNumber suspendStatusNumbers ss
+    return (threadStatus, suspendStatus)
+
 parseLineTableReply :: Get LineTable
 parseLineTableReply = do
     start <- parseLong
@@ -1163,6 +1195,14 @@ resumeThreadCommand threadId packetId =
         19
         packetId
         0 11 3
+        (toStrict $ runPut $ putThreadId threadId)
+
+threadStatusCommand :: JavaThreadId -> PacketId -> Packet
+threadStatusCommand threadId@(JavaObjectId s _) packetId =
+    CommandPacket
+        (11 + s)
+        packetId
+        0 11 4
         (toStrict $ runPut $ putThreadId threadId)
 
 threadGroupCommand :: JavaThreadId -> PacketId -> Packet

@@ -6,6 +6,8 @@ module Language.Java.Jdi
 , AllLineLocations(..)
 , StepSize(..)
 , StepDepth(..)
+, ThreadStatus(..)
+, SuspendStatus(..)
 , SuspendPolicy(..)
 ) where
 

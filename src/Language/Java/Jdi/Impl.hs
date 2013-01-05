@@ -67,12 +67,16 @@ module Language.Java.Jdi.Impl
 , frameCount
 , frames
 , threadGroup
+, status
+, isSuspended
 , J.ThreadGroupReference
 , parent
 , threadGroups
 , threads
 , J.StepSize(..)
 , J.StepDepth(..)
+, J.ThreadStatus(..)
+, J.SuspendStatus(..)
 , Field
 , Method
 , arguments
@@ -839,6 +843,22 @@ threadGroup tr@(J.ThreadReference ti) = do
     reply <- runCommand $ J.threadGroupCommand ti
     let r = J.dat reply
     return $ runGet (J.parseThreadGroupReference idsizes) (J.toLazy r)
+
+status :: (Error e, MonadIO m, MonadError e m)
+       => J.ThreadReference -> VirtualMachine m J.ThreadStatus
+status tr@(J.ThreadReference ti) = do
+    reply <- runCommand $ J.threadStatusCommand ti
+    let r = J.dat reply
+    let (threadStatus, _) = runGet J.parseThreadStatusReply (J.toLazy r)
+    return threadStatus
+
+isSuspended :: (Error e, MonadIO m, MonadError e m)
+            => J.ThreadReference -> VirtualMachine m Bool
+isSuspended tr@(J.ThreadReference ti) = do
+    reply <- runCommand $ J.threadStatusCommand ti
+    let r = J.dat reply
+    let (_, suspendStatus) = runGet J.parseThreadStatusReply (J.toLazy r)
+    return $ suspendStatus == J.Suspended
 
 -- }}}
 

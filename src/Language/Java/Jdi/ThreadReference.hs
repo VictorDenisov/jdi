@@ -4,6 +4,8 @@ module Language.Java.Jdi.ThreadReference
 , frameCount
 , frames
 , threadGroup
+, status
+, isSuspended
 ) where
 
 import Language.Java.Jdi.Impl
