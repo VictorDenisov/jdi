@@ -452,9 +452,32 @@ data StringReference = StringReference JavaObjectId
 data Field = Field JavaFieldId String String JavaInt
              deriving (Eq, Show)
 
+field_public       = 0x0001 :: JavaInt
+field_private      = 0x0002 :: JavaInt
+field_protected    = 0x0004 :: JavaInt
+field_static       = 0x0008 :: JavaInt
+field_final        = 0x0010 :: JavaInt
+field_volatile     = 0x0040 :: JavaInt
+field_transient    = 0x0080 :: JavaInt
+field_synthetic    = 0x1000 :: JavaInt
+field_enum         = 0x4000 :: JavaInt
+
                     -- methodId name signature modBits
 data Method = Method JavaMethodId String String JavaInt
               deriving (Eq, Show)
+
+method_public       = 0x0001
+method_private      = 0x0002
+method_protected    = 0x0004
+method_static       = 0x0008
+method_final        = 0x0010
+method_synchronized = 0x0020
+method_bridge       = 0x0040
+method_varargs      = 0x0080
+method_native       = 0x0100
+method_abstract     = 0x0400
+method_strict       = 0x0800
+method_synthetic    = 0x1000
 
 data ThreadReference = ThreadReference JavaThreadId
                        deriving (Eq, Show)

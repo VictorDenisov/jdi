@@ -58,6 +58,9 @@ body = do
     fields <- RT.fields mainClass
     checkFieldsNames fields
     liftIO . putStrLn $ "Main class fields: " ++ show fields
+    liftIO . putStrLn $ "Main class fields static: " ++ (show $ map isStatic fields)
+    liftIO . putStrLn $ "Main class fields public: " ++ (show $ map isPublic fields)
+    liftIO . putStrLn $ "Main class fields private: " ++ (show $ map isPrivate fields)
     sName <- sourceName mainClass
     liftIO . putStrLn $ "Main class source name: " ++ sName
     mainClassInterfaces <- RT.interfaces mainClass
@@ -237,4 +240,4 @@ pollEvents stopFunction = do
         then return e
         else pollEvents stopFunction
 
-isMainClass ref = "LMain;" == RT.genericSignature ref
+isMainClass ref = "LMain;" == signature ref

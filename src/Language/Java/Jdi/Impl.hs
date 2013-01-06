@@ -6,6 +6,11 @@ module Language.Java.Jdi.Impl
 , Locatable(..)
 , SourceName(..)
 , AllLineLocations(..)
+, DeclaringType(..)
+, GenericSignature(..)
+, Signature(..)
+, Accessible(..)
+, TypeComponent(..)
 , vmName
 , description
 , version
@@ -47,7 +52,6 @@ module Language.Java.Jdi.Impl
 , createBreakpointRequest
 , createStepRequest
 , J.ReferenceType
-, genericSignature
 , refTypeGetValue
 , fields
 , methods
@@ -85,7 +89,6 @@ module Language.Java.Jdi.Impl
 , LocalVariable
 , Location
 , codeIndex
-, declaringType
 , lineNumber
 , method
 , J.SuspendPolicy(..)
@@ -108,6 +111,7 @@ import qualified Data.ByteString.Char8 as B8
 import Data.Binary.Get (runGet)
 import Data.Binary.Put (runPut)
 import Data.List (find)
+import Data.Bits ((.&.))
 import GHC.IO.Handle (hWaitForInput)
 import qualified Data.Sequence as S
 -- }}}
@@ -287,6 +291,32 @@ class SourceName a where
 
 class AllLineLocations a where
     allLineLocations :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m [Location]
+
+class DeclaringType a where
+    declaringType :: a -> J.ReferenceType
+
+class GenericSignature a where
+    genericSignature :: a -> String
+
+class Signature a where
+    signature :: a -> String
+
+class Accessible a where
+    isPackagePrivate :: a -> Bool
+    isPrivate :: a -> Bool
+    isProtected :: a -> Bool
+    isPublic :: a -> Bool
+    modifiers :: a -> Int
+
+class ( Name a
+      , DeclaringType a
+      , GenericSignature a
+      , Accessible a
+      , Signature a)
+   => TypeComponent a where
+    isFinal :: a -> Bool
+    isStatic :: a -> Bool
+    isSynthetic :: a -> Bool
 
 -- }}}
 
@@ -619,8 +649,8 @@ createStepRequest tr ss sd = EventRequest J.SuspendAll Nothing [] (StepRequest t
 
 -- ReferenceType functions section {{{
 
-genericSignature :: J.ReferenceType -> String
-genericSignature (J.ReferenceType _ _ gs _) = gs
+instance Signature J.ReferenceType where
+    signature (J.ReferenceType _ _ gs _) = gs
 
 {- | Gets the Value of a given static Field in this type. The Field must be
 valid for this type; that is, it must be declared in this type, a superclass,
@@ -663,7 +693,7 @@ methods rt@(J.ReferenceType _ refId _ _) = do
     return $ map (Method rt) methods
 
 instance Name J.ReferenceType where
-    name = return . signatureToName . genericSignature
+    name = return . signatureToName . signature
 
 instance SourceName J.ReferenceType where
     sourceName (J.ReferenceType _ refId _ _) = do
@@ -912,6 +942,36 @@ data Field = Field J.ReferenceType J.Field
 instance Name Field  where
     name (Field _ (J.Field _ nm _ _)) = return nm
 
+instance Accessible Field where
+    isPackagePrivate f = not (isPrivate f)
+                      && not (isProtected f)
+                      && not (isPublic f)
+    isPrivate (Field _ (J.Field _ _ _ modbits))
+                                = (modbits .&. J.field_private) /= 0
+    isProtected (Field _ (J.Field _ _ _ modbits))
+                                = (modbits .&. J.field_protected) /= 0
+    isPublic (Field _ (J.Field _ _ _ modbits))
+                                = (modbits .&. J.field_public) /= 0
+    modifiers (Field _ (J.Field _ _ _ modbits)) = fromIntegral modbits
+
+instance DeclaringType Field where
+    declaringType (Field rt _) = rt
+
+-- TODO needs implementation
+instance GenericSignature Field where
+    genericSignature (Field _ (J.Field _ _ sig _)) = undefined
+
+instance Signature Field where
+    signature (Field _ (J.Field _ _ sig _)) = sig
+
+instance TypeComponent Field where
+    isFinal (Field _ (J.Field _ _ _ modbits))
+                            = (J.field_final .&. modbits) /= 0
+    isStatic (Field _ (J.Field _ _ _ modbits))
+                            = (J.field_static .&. modbits) /= 0
+    isSynthetic (Field _ (J.Field _ _ _ modbits))
+                            = (J.field_synthetic .&. modbits) /= 0
+
 -- }}}
 
 -- Method functions section {{{
@@ -964,8 +1024,8 @@ data Location = Location J.ReferenceType J.Method J.Line
 codeIndex :: Location -> Int
 codeIndex (Location _ _ (J.Line ci _)) = fromIntegral ci
 
-declaringType :: Location -> J.ReferenceType
-declaringType (Location rt _ _) = rt
+instance DeclaringType Location where
+    declaringType (Location rt _ _) = rt
 
 lineNumber :: Location -> Int
 lineNumber (Location _ _ (J.Line _ ln)) = fromIntegral ln

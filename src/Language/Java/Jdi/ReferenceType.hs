@@ -1,6 +1,5 @@
 module Language.Java.Jdi.ReferenceType
 ( ReferenceType
-, genericSignature
 , getValue
 , fields
 , methods
