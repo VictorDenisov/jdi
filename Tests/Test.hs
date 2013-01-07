@@ -161,6 +161,12 @@ body = do
     fieldValues <- mapM (RT.getValue mainClass) (take 2 fields)
     checkFieldValues fieldValues
 
+    liftIO . putStrLn $ "==== taking value of non static field in reftype ===="
+    (void $ RT.getValue mainClass (last fields))
+        `catchError`
+            (\ee -> liftIO $ putStrLn $ "error message: " ++ (show ee))
+    liftIO . putStrLn $ "===== ============ ======"
+
     liftIO . putStrLn $ "===== this Object values ======"
     let evv = head $ ES.events ev1
     let curThread = E.thread evv

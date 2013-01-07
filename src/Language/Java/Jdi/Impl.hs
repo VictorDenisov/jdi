@@ -672,7 +672,9 @@ initialized.
  -}
 refTypeGetValue :: (Error e, MonadIO m, MonadError e m) =>
                    J.ReferenceType -> Field -> VirtualMachine m Value
-refTypeGetValue (J.ReferenceType _ ri _ _) (Field _ f) = do
+refTypeGetValue (J.ReferenceType _ ri _ _) field@(Field _ f) = do
+    when (not $ isStatic field)
+                $ throwError $ strMsg "Only static fields are allowed in ReferenceType getValue"
     reply <- runCommand $ J.refGetValuesCommand ri [f]
     idsizes <- getIdSizes
     return $ toJdiValue $ head $ runGet
