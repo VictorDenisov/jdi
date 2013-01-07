@@ -1,6 +1,7 @@
 module Language.Java.Jdi.StackFrame
 ( StackFrame
 , getValue
+, thisObject
 ) where
 
 import Language.Java.Jdi.Impl

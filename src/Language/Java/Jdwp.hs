@@ -442,6 +442,9 @@ data ReferenceType = ReferenceType
                             ClassStatus
                      deriving (Eq, Show)
 
+data ObjectReference = ObjectReference JavaObjectId
+                       deriving (Eq, Show)
+
 data ArrayReference = ArrayReference JavaObjectId
                       deriving (Eq, Show)
 
@@ -940,6 +943,14 @@ parseLineTableReply = do
     lines <- mapM (\_ -> parseLine) [1..lineCount]
     return $ LineTable start end lines
 
+parseMonitorInfoReply :: IdSizes
+                      -> Get (ThreadReference, JavaInt, [ThreadReference])
+parseMonitorInfoReply idsizes = do
+    owner <- parseThreadReference idsizes
+    entryCount <- parseInt
+    waiters <- parseAllThreadsReply idsizes
+    return (owner, entryCount, waiters)
+
 parseLine :: Get Line
 parseLine = Line <$> parseLong <*> parseInt
 
@@ -1195,6 +1206,44 @@ variableTableCommand refId@(JavaObjectId rSize _)
         (toStrict $ runPut $ (putReferenceTypeId refId >> putMethodId mId))
 -- }}}
 
+-- ObjectReference command set. (9) {{{
+objGetValuesCommand :: JavaObjectId -> [Field] -> PacketId -> Packet
+objGetValuesCommand typeId@(JavaObjectId size _) fs packetId =
+    CommandPacket
+        (11 + size + 4 + len fs * fieldSize fs)
+        packetId 0 9 2
+        (toStrict $ runPut $ do
+            putReferenceTypeId typeId
+            putInt $ len fs
+            putFields fs)
+    where
+        len = fromIntegral . length
+        fieldSize [] = 0
+        fieldSize ((Field (JavaFieldId fsize _ ) _ _ _) : _) = fsize
+        putFields = mapM_ $ \(Field id _ _ _) -> putFieldId id
+
+monitorInfoCommand :: JavaObjectId -> PacketId -> Packet
+monitorInfoCommand oId@(JavaObjectId s _) packetId =
+    CommandPacket
+        (11 + s)
+        packetId 0 9 5
+        (toStrict $ runPut $ putObjectId oId)
+
+disableCollectionCommand :: JavaObjectId -> PacketId -> Packet
+disableCollectionCommand oId@(JavaObjectId s _) packetId =
+    CommandPacket
+        (11 + s)
+        packetId 0 9 7
+        (toStrict $ runPut $ putObjectId oId)
+
+enableCollectionCommand :: JavaObjectId -> PacketId -> Packet
+enableCollectionCommand oId@(JavaObjectId s _) packetId =
+    CommandPacket
+        (11 + s)
+        packetId 0 9 8
+        (toStrict $ runPut $ putObjectId oId)
+-- }}}
+
 -- StringReference command set. (10) {{{
 stringValueCommand :: JavaObjectId -> PacketId -> Packet
 stringValueCommand sId@(JavaObjectId s _) packetId =
@@ -1345,6 +1394,18 @@ getValuesCommand
         putSlots = mapM_ $ \(Slot _ _ sig _ slot) -> do
             putInt slot
             putByte $ fromIntegral $ ord $ head sig
+
+thisObjectCommand :: JavaThreadId -> JavaFrameId -> PacketId -> Packet
+thisObjectCommand
+            threadId@(JavaObjectId st _)
+            frameId@(JavaFrameId sf _)
+            packetId =
+    CommandPacket
+        (11 + st + sf)
+        packetId 0 16 3
+        (toStrict $ runPut $ do
+                            putThreadId threadId
+                            putFrameId  frameId)
 -- }}}
 -- }}}
 

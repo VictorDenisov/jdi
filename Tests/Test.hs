@@ -12,6 +12,7 @@ import qualified Language.Java.Jdi.Value as V
 import qualified Language.Java.Jdi.StackFrame as SF
 import qualified Language.Java.Jdi.ThreadReference as TR
 import qualified Language.Java.Jdi.ThreadGroupReference as TG
+import qualified Language.Java.Jdi.ObjectReference as OR
 import qualified Language.Java.Jdi.Method as M
 import qualified Language.Java.Jdi.Location as L
 
@@ -42,7 +43,7 @@ body = do
     liftIO . putStrLn $ show rd
 
     pollEvents $ \e -> case E.eventKind e of
-        E.ClassPrepare -> isMainClass $ E.referenceType e
+        E.ClassPrepare -> isMainClass $ referenceType e
         _ -> False
 
     classes <- Vm.allClasses
@@ -55,7 +56,14 @@ body = do
     threadGroups <- Vm.topLevelThreadGroups
     liftIO . putStrLn $ intercalate "\n" (map show threadGroups)
     let mainClass = head $ filter isMainClass classes
+
+    liftIO . putStrLn $ "Before fields of main class"
+
     fields <- RT.fields mainClass
+
+    liftIO . putStrLn $ "After fields of main class"
+    liftIO . putStrLn $ show fields
+
     checkFieldsNames fields
     liftIO . putStrLn $ "Main class fields: " ++ show fields
     liftIO . putStrLn $ "Main class fields static: " ++ (show $ map isStatic fields)
@@ -80,7 +88,9 @@ body = do
     liftIO . putStrLn =<< (name $ head methods)
     forM_ threads (\thread -> liftIO . putStrLn =<< name thread)
     let isMainMethod = (liftM ("main" ==)) . name
+    let isRunMethod = (liftM ("run" ==)) . name
     methodMain <- head <$> (filterM isMainMethod methods)
+    runMethod <- head <$> (filterM isRunMethod methods)
     let isAnotherMethod = (liftM ("anotherMethod" ==)) . name
     anotherMethod <- head <$> (filterM isAnotherMethod methods)
     liftIO . putStrLn $ "Variables of method anotherMethod: " ++ (show anotherMethod)
@@ -112,6 +122,7 @@ body = do
     lineTable <- allLineLocations methodMain
     liftIO . putStrLn $ "After line table"
     mainLocation <- location methodMain
+    runLocation <- location runMethod
     liftIO . putStrLn $ intercalate "\n" (map show lineTable)
     classLineLocations <- allLineLocations mainClass
     liftIO . putStrLn $ intercalate "\n" (map show classLineLocations)
@@ -139,12 +150,26 @@ body = do
             liftIO $ putStrLn sV
         otherwise  -> liftIO $ putStrLn "Not array value"
 
+    bpr <- ER.enable $ ER.createBreakpointRequest runLocation
+    ev <- pollEvents $ \e -> case E.eventKind e of
+        E.Breakpoint -> True
+        _ -> False
 
     spr <- ER.enable $ (ER.createStepRequest (E.thread ev) StepLine StepOver)
     Vm.resume
-    void $ ES.removeEvent
-    fieldValues <- mapM (RT.getValue mainClass) fields
+    ev1 <- ES.removeEvent
+    fieldValues <- mapM (RT.getValue mainClass) (take 2 fields)
     checkFieldValues fieldValues
+
+    liftIO . putStrLn $ "===== this Object values ======"
+    let evv = head $ ES.events ev1
+    let curThread = E.thread evv
+    fr1 <- head <$> TR.allFrames curThread
+    thisObj <- SF.thisObject fr1
+    argsValue <- OR.getValue thisObj (last fields)
+    liftIO . putStrLn $ show argsValue
+    liftIO . putStrLn $ "===== =========== ======"
+
     Vm.resume
     void $ ES.removeEvent
 
@@ -202,11 +227,13 @@ printThreadGroup depth tg = do
     return ()
 
 checkFieldsNames fields = do
-    when (length fields /= 2) $ liftIO exitFailure
+    when (length fields /= 3) $ liftIO exitFailure
     f1name <- name (fields !! 0)
     f2name <- name (fields !! 1)
+    f3name <- name (fields !! 2)
     when (f1name /= "f1") $ liftIO exitFailure
     when (f2name /= "fprivate") $ liftIO exitFailure
+    when (f3name /= "args") $ liftIO exitFailure
 
 checkFieldValues fieldValues = do
     liftIO . putStrLn $ "Main class field values: " ++ show fieldValues

@@ -6,6 +6,7 @@ module Language.Java.Jdi.Impl
 , Locatable(..)
 , SourceName(..)
 , AllLineLocations(..)
+, RefType(..)
 , DeclaringType(..)
 , GenericSignature(..)
 , Signature(..)
@@ -38,7 +39,6 @@ module Language.Java.Jdi.Impl
 , suspendVm
 , topLevelThreadGroups
 , J.Event
-, referenceType
 , thread
 , J.EventKind(..)
 , J.eventKind
@@ -66,6 +66,7 @@ module Language.Java.Jdi.Impl
 , Value(..)
 , StackFrame
 , stackFrameGetValue
+, thisObject
 , J.ThreadReference
 , allFrames
 , frameCount
@@ -77,6 +78,12 @@ module Language.Java.Jdi.Impl
 , parent
 , threadGroups
 , threads
+, J.ObjectReference
+, disableCollection
+, enableCollection
+, entryCount
+, objGetValue
+, objGetValues
 , J.StepSize(..)
 , J.StepDepth(..)
 , J.ThreadStatus(..)
@@ -291,6 +298,9 @@ class SourceName a where
 
 class AllLineLocations a where
     allLineLocations :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m [Location]
+
+class RefType a where
+    referenceType :: a -> J.ReferenceType
 
 class DeclaringType a where
     declaringType :: a -> J.ReferenceType
@@ -518,8 +528,9 @@ instance Locatable J.Event where
         locationFromJavaLocation javaLocation
 
 -- | Returns the reference type for which this event was generated.
-referenceType :: J.Event -> J.ReferenceType
-referenceType (J.ClassPrepareEvent
+
+instance RefType J.Event where
+    referenceType (J.ClassPrepareEvent
                     _
                     threadId
                     typeTag
@@ -661,10 +672,10 @@ initialized.
  -}
 refTypeGetValue :: (Error e, MonadIO m, MonadError e m) =>
                    J.ReferenceType -> Field -> VirtualMachine m Value
-refTypeGetValue (J.ReferenceType _ ri _ _) (Field _ f)= do
+refTypeGetValue (J.ReferenceType _ ri _ _) (Field _ f) = do
     reply <- runCommand $ J.refGetValuesCommand ri [f]
     idsizes <- getIdSizes
-    toJdiValue $ head $ runGet
+    return $ toJdiValue $ head $ runGet
                         (J.parseGetValuesReply idsizes)
                         (J.toLazy $ J.dat reply)
 
@@ -736,7 +747,7 @@ getArrValue arrRef@(J.ArrayReference objId) index = do
     reply <- runCommand $ J.getArrayValuesCommand objId (fromIntegral index) 1
     let r = J.dat reply
     let values = runGet (J.parseArrayRegion idsizes) (J.toLazy r)
-    toJdiValue $ head values
+    return $ toJdiValue $ head values
 
 getArrValues :: (Error e, MonadIO m, MonadError e m) =>
                 J.ArrayReference -> VirtualMachine m [Value]
@@ -746,7 +757,7 @@ getArrValues arrRef@(J.ArrayReference objId) = do
     reply <- runCommand $ J.getArrayValuesCommand objId 0 (fromIntegral l)
     let r = J.dat reply
     let values = runGet (J.parseArrayRegion idsizes) (J.toLazy r)
-    mapM toJdiValue values
+    return $ map toJdiValue values
 
 arrLength :: (Error e, MonadIO m, MonadError e m) =>
              J.ArrayReference -> VirtualMachine m Int
@@ -773,7 +784,7 @@ stringValue sr@(J.StringReference sid) = do
 data Value = ArrayValue J.ArrayReference
            | ByteValue Int
            | CharValue Char
-       --    | ObjectValue ObjectReference
+           | ObjectValue J.ObjectReference
            | FloatValue Float
            | DoubleValue Double
            | IntValue Int
@@ -788,24 +799,22 @@ data Value = ArrayValue J.ArrayReference
        --    | ClassObjectValue
              deriving (Eq, Show)
 
-toJdiValue :: (Monad m, Error e, MonadError e m) =>
-              (J.Value -> m Value)
-toJdiValue (J.BooleanValue v) = return (BooleanValue $ v /= 0)
+toJdiValue :: J.Value -> Value
+toJdiValue (J.BooleanValue v) = BooleanValue $ v /= 0
 
-toJdiValue (J.ByteValue v) = return (ByteValue $ fromIntegral v)
+toJdiValue (J.ByteValue v) = ByteValue $ fromIntegral v
 
-toJdiValue (J.CharValue v) = return (CharValue $ toEnum $ fromIntegral v)
+toJdiValue (J.CharValue v) = CharValue $ toEnum $ fromIntegral v
 
-toJdiValue (J.IntValue v) = return (IntValue $ fromIntegral v)
+toJdiValue (J.IntValue v) = IntValue $ fromIntegral v
 
-toJdiValue (J.LongValue v) = return (LongValue $ fromIntegral v)
+toJdiValue (J.LongValue v) = LongValue $ fromIntegral v
 
-toJdiValue (J.ArrayValue objectId) = return (ArrayValue $
-                                                J.ArrayReference objectId)
+toJdiValue (J.ArrayValue objectId) = ArrayValue $ J.ArrayReference objectId
 
-toJdiValue (J.StringValue objectId) = return (StringValue $
-                                                J.StringReference objectId)
-toJdiValue v = throwError $ strMsg $ "unknown value yet " ++ show v
+toJdiValue (J.StringValue objectId) = StringValue $ J.StringReference objectId
+
+toJdiValue (J.ObjectValue objectId) = ObjectValue $ J.ObjectReference objectId
 
 -- }}}
 
@@ -820,13 +829,23 @@ stackFrameGetValue (StackFrame (J.ThreadReference ti) (J.StackFrame fi _))
          (LocalVariable _ _ slot) = do
     reply <- runCommand $ J.getValuesCommand ti fi [slot]
     idsizes <- getIdSizes
-    toJdiValue $ head $ runGet
+    return $ toJdiValue $ head $ runGet
                         (J.parseGetValuesReply idsizes)
                         (J.toLazy $ J.dat reply)
 
 instance Locatable StackFrame where
     location (StackFrame _ (J.StackFrame _ javaLoc))
                         = locationFromJavaLocation javaLoc
+
+thisObject :: (Error e, MonadIO m, MonadError e m)
+           => StackFrame -> VirtualMachine m J.ObjectReference
+thisObject (StackFrame (J.ThreadReference ti) (J.StackFrame fi _)) = do
+    reply <- runCommand $ J.thisObjectCommand ti fi
+    idsizes <- getIdSizes
+    let (ObjectValue ref) = toJdiValue $ runGet
+                        (J.parseTaggedValue idsizes)
+                        (J.toLazy $ J.dat reply)
+    return ref
 
 -- }}}
 
@@ -931,6 +950,84 @@ threads (J.ThreadGroupReference refId) = do
                         (J.parseThreadGroupChildrenReply idsizes)
                         (J.toLazy r)
     return ts
+
+-- }}}
+
+-- ObjectReference functions section {{{
+
+disableCollection :: (Error e, MonadIO m, MonadError e m)
+                  => J.ObjectReference -> VirtualMachine m ()
+disableCollection (J.ObjectReference refId) = do
+    reply <- runCommand $ J.disableCollectionCommand refId
+    return ()
+
+enableCollection :: (Error e, MonadIO m, MonadError e m)
+                 => J.ObjectReference -> VirtualMachine m ()
+enableCollection (J.ObjectReference refId) = do
+    reply <- runCommand $ J.enableCollectionCommand refId
+    return ()
+
+entryCount :: (Error e, MonadIO m, MonadError e m)
+           => J.ObjectReference -> VirtualMachine m Int
+entryCount (J.ObjectReference refId) = do
+    reply <- runCommand $ J.monitorInfoCommand refId
+    let r = J.dat reply
+    idsizes <- getIdSizes
+    let (_, count, _) = runGet (J.parseMonitorInfoReply idsizes) (J.toLazy r)
+    return $ fromIntegral count
+
+objGetValue :: (Error e, MonadIO m, MonadError e m)
+            => J.ObjectReference -> Field -> VirtualMachine m Value
+objGetValue (J.ObjectReference ri) (Field _ f) = do
+    reply <- runCommand $ J.objGetValuesCommand ri [f]
+    idsizes <- getIdSizes
+    return $ toJdiValue $ head $ runGet
+                        (J.parseGetValuesReply idsizes)
+                        (J.toLazy $ J.dat reply)
+
+objGetValues :: (Error e, MonadIO m, MonadError e m)
+             => J.ObjectReference -> [Field] -> VirtualMachine m [Value]
+objGetValues (J.ObjectReference ri) fs = do
+    reply <- runCommand $ J.objGetValuesCommand ri (map getFid fs)
+    idsizes <- getIdSizes
+    return $ map toJdiValue $ runGet (J.parseGetValuesReply idsizes)
+                             (J.toLazy $ J.dat reply)
+    where getFid (Field _ f) = f
+
+invokeMethod :: J.ObjectReference -- | object
+             -> J.ThreadReference -- | thread
+             -> Method -- | Method
+             -> [Value] -- | Arguments
+             -> Int -- | Options
+             -> Value -- | return value
+invokeMethod = undefined
+
+isCollected :: J.ObjectReference -> VirtualMachine m Bool
+isCollected = undefined
+
+owningThread :: J.ObjectReference -> VirtualMachine m J.ThreadReference
+owningThread = undefined
+
+instance RefType J.ObjectReference where
+    referenceType = undefined
+
+referringObjects :: J.ObjectReference
+                 -> Int
+                 -> VirtualMachine m [J.ObjectReference]
+referringObjects = undefined
+
+setValue :: J.ObjectReference
+         -> Field
+         -> Value
+         -> VirtualMachine m ()
+setValue = undefined
+
+uniqueId :: J.ObjectReference
+         -> VirtualMachine m Int
+uniqueId = undefined
+
+waitingThreads :: J.ObjectReference -> VirtualMachine m [J.ThreadReference]
+waitingThreads = undefined
 
 -- }}}
 

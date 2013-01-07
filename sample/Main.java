@@ -4,13 +4,14 @@ import java.util.concurrent.TimeUnit;
 public class Main implements RunnableFuture<String> {
     static public int f1 = 10;
     static private String fprivate = "fprivate_value";
+    private String[] args;
+
+    public Main(String[] args) {
+        this.args = args;
+    }
 
     public static void main(String[] args) {
-        System.out.println("Hello all");
-        System.out.println("Arguments are");
-        for (int i = 0; i < args.length; ++i) {
-            System.out.println(i + ": " + args[i]);
-        }
+        new Thread(new Main(args)).start();
     }
 
     public static String anotherMethod(long arg1, int arg2, String arg3, long arg4) {
@@ -22,6 +23,11 @@ public class Main implements RunnableFuture<String> {
     }
 
     public void run() {
+        System.out.println("Hello all");
+        System.out.println("Arguments are");
+        for (int i = 0; i < args.length; ++i) {
+            System.out.println(i + ": " + args[i]);
+        }
     }
 
     public boolean cancel(boolean v) {
