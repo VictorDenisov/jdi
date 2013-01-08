@@ -1,6 +1,5 @@
 module Language.Java.Jdi.Event
 ( Event
-, referenceType
 , thread
 , EventKind(..)
 , eventKind

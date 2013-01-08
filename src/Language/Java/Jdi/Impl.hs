@@ -299,6 +299,7 @@ class SourceName a where
 class AllLineLocations a where
     allLineLocations :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m [Location]
 
+-- | Returns the reference type for which this event was generated.
 class RefType a where
     referenceType :: a -> J.ReferenceType
 
@@ -495,17 +496,9 @@ exit exitCode = do
     liftIO $ J.waitReply h
     return ()
 
--- | Continues the execution of the application running in this virtual machine.
 resumeVm :: (Error e, MonadIO m, MonadError e m) => VirtualMachine m ()
 resumeVm = runCommand J.resumeVmCommand >> return ()
 
-{- | Suspends the execution of the application running in this virtual machine.
-All threads currently running will be suspended.
-
-Unlike Thread.suspend(), suspends of both the virtual machine and individual
-threads are counted. Before a thread will run again, it must be resumed (through
-resume() or ThreadReference.resume()) the same number of times it has been
-suspended. -}
 suspendVm :: (Error e, MonadIO m, MonadError e m) => VirtualMachine m ()
 suspendVm = runCommand J.suspendVmCommand >> return ()
 
@@ -527,8 +520,6 @@ instance Locatable J.Event where
         locationFromJavaLocation javaLocation
     location (J.StepEvent _ _ javaLocation) =
         locationFromJavaLocation javaLocation
-
--- | Returns the reference type for which this event was generated.
 
 instance RefType J.Event where
     referenceType (J.ClassPrepareEvent
@@ -605,8 +596,15 @@ data EventRequest = EventRequest
                   | BreakpointRequest Location
                   | StepRequest ThreadReference J.StepSize J.StepDepth
                     deriving (Show, Eq)
+{- | Enables the event request and returns descriptor of the enabled event
+request. The descriptor can be used to disable the event request.
 
-enable :: (Error e, MonadIO m, MonadError e m) => EventRequest -> VirtualMachine m EventRequest
+While this event request is disabled, the event request will be ignored and the
+target VM will not be stopped if any of its threads reaches the event request.
+Disabled event requests still exist, and are included in event request lists.
+-}
+enable :: (Error e, MonadIO m, MonadError e m)
+       => EventRequest -> VirtualMachine m EventRequest
 enable (EventRequest suspendPolicy Nothing modifiers ClassPrepareRequest) = do
     reply <- runCommand $ J.eventSetRequest J.ClassPrepare suspendPolicy modifiers
     let r = J.dat reply
@@ -632,11 +630,20 @@ enable (EventRequest suspendPolicy Nothing modifiers request@(StepRequest
     return $ EventRequest suspendPolicy (Just requestId) modifiers request
 enable request@(EventRequest suspendPolicy (Just _) _ _) = return request
 
+-- | Determines if this event request is currently enabled.
 isEnabled :: EventRequest -> Bool
 isEnabled (EventRequest _ (Just _) _ _) = True
 isEnabled (EventRequest _ Nothing _ _)  = False
 
-disable :: (Error e, MonadIO m, MonadError e m) => EventRequest -> VirtualMachine m EventRequest
+{- | Disables the event request and returns descriptor of the disabled event
+request. The descriptor can be used to enable the event request again.
+
+While this event request is disabled, the event request will be ignored and the
+target VM will not be stopped if any of its threads reaches the event request.
+Disabled event requests still exist, and are included in event request lists.
+-}
+disable :: (Error e, MonadIO m, MonadError e m)
+        => EventRequest -> VirtualMachine m EventRequest
 disable (EventRequest
                 suspendPolicy
                 (Just requestId)
@@ -645,16 +652,28 @@ disable (EventRequest
     runCommand (J.eventClearRequest J.ClassPrepare requestId) >>
     return (EventRequest suspendPolicy Nothing modifiers er)
 
+{- | Limit the requested event to be reported at most once after a given number
+of occurrences. The event is not reported the first count - 1 times this filter
+is reached. To request a one-off event, call this method with a count of 1.
+
+Once the count reaches 0, any subsequent filters in this request are applied.
+If none of those filters cause the event to be suppressed, the event is
+reported. Otherwise, the event is not reported. In either case subsequent events
+are never reported for this request.
+-}
 addCountFilter :: Int -> EventRequest -> EventRequest
 addCountFilter count (EventRequest sp ri ems er) =
             EventRequest sp ri ((J.Count (fromIntegral count)) : ems) er
 
+-- | Creates a new disabled ClassPrepareRequest.
 createClassPrepareRequest :: EventRequest
 createClassPrepareRequest = EventRequest J.SuspendAll Nothing [] ClassPrepareRequest
 
+-- | Creates a new disabled BreakpointRequest.
 createBreakpointRequest :: Location -> EventRequest
 createBreakpointRequest l = EventRequest J.SuspendAll Nothing [] (BreakpointRequest l)
 
+-- | Creates a new disabled StepRequest.
 createStepRequest :: ThreadReference -> J.StepSize -> J.StepDepth -> EventRequest
 createStepRequest tr ss sd = EventRequest J.SuspendAll Nothing [] (StepRequest tr ss sd)
 
@@ -1028,12 +1047,12 @@ objGetValues (J.ObjectReference ri) fs = do
                              (J.toLazy $ J.dat reply)
     where getFid (Field _ f) = f
 
-invokeMethod :: J.ObjectReference -- | object
-             -> ThreadReference -- | thread
-             -> Method -- | Method
-             -> [Value] -- | Arguments
-             -> Int -- | Options
-             -> Value -- | return value
+invokeMethod :: J.ObjectReference
+             -> ThreadReference
+             -> Method
+             -> [Value]
+             -> Int
+             -> Value
 invokeMethod = undefined
 
 isCollected :: J.ObjectReference -> VirtualMachine m Bool

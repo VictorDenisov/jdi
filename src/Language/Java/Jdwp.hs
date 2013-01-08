@@ -348,6 +348,7 @@ threadId (ClassPrepareEvent _ ti _ _ _ _) = ti
 threadId (BreakpointEvent _ ti _) = ti
 threadId (StepEvent _ ti _) = ti
 
+-- | Returns type of event.
 eventKind :: Event -> EventKind
 eventKind (VmStartEvent {})= VmStart
 eventKind (VmDeathEvent {})= VmDeath
@@ -355,6 +356,7 @@ eventKind (ClassPrepareEvent {})= ClassPrepare
 eventKind (BreakpointEvent {})= Breakpoint
 eventKind (StepEvent {})= SingleStep
 
+-- | Types of events can be received from the virtual machine.
 data EventKind = VmDisconnected
                | VmStart
                | ThreadDeath
