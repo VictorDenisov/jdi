@@ -799,6 +799,7 @@ data Value = ArrayValue J.ArrayReference
            | StringValue J.StringReference
            | ThreadValue ThreadReference
            | ThreadGroupValue ThreadGroupReference
+           | OtherValue String
        --    | ClassLoaderValue
        --    | ClassObjectValue
              deriving (Eq, Show)
@@ -819,6 +820,8 @@ toJdiValue (J.ArrayValue objectId) = ArrayValue $ J.ArrayReference objectId
 toJdiValue (J.StringValue objectId) = StringValue $ J.StringReference objectId
 
 toJdiValue (J.ObjectValue objectId) = ObjectValue $ J.ObjectReference objectId
+
+toJdiValue x = OtherValue $ show x
 
 -- }}}
 
