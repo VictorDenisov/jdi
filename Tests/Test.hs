@@ -47,7 +47,7 @@ body = do
         _ -> False
 
     classes <- Vm.allClasses
-    cNames <- mapM name classes
+    let cNames = map name classes
     liftIO . putStrLn $ intercalate "\n" cNames
     threads <- Vm.allThreads
     liftIO . putStrLn $ intercalate "\n" (map show threads)
@@ -85,14 +85,14 @@ body = do
     liftIO . putStrLn $ "Methods for class " ++ (show mainClass)
     liftIO . putStrLn $ intercalate "\n" (map show methods)
     liftIO . putStrLn =<< Vm.name
-    liftIO . putStrLn =<< (name $ head methods)
-    forM_ threads (\thread -> liftIO . putStrLn =<< name thread)
-    let isMainMethod = (liftM ("main" ==)) . name
-    let isRunMethod = (liftM ("run" ==)) . name
-    methodMain <- head <$> (filterM isMainMethod methods)
-    runMethod <- head <$> (filterM isRunMethod methods)
-    let isAnotherMethod = (liftM ("anotherMethod" ==)) . name
-    anotherMethod <- head <$> (filterM isAnotherMethod methods)
+    liftIO . putStrLn $ name $ head methods
+    forM_ threads (\thread -> liftIO . putStrLn $ name thread)
+    let isMainMethod = ("main" ==) . name
+    let isRunMethod = ("run" ==) . name
+    let methodMain = head $ filter isMainMethod methods
+    let runMethod = head $ filter isRunMethod methods
+    let isAnotherMethod = ("anotherMethod" ==) . name
+    let anotherMethod = head $ filter isAnotherMethod methods
     liftIO . putStrLn $ "Variables of method anotherMethod: " ++ (show anotherMethod)
     do
         l <- M.arguments anotherMethod
@@ -139,7 +139,7 @@ body = do
     liftIO . putStrLn $ show loc
     liftIO . putStrLn $ "Values of args"
 
-    let curThread = E.thread ev
+    curThread <- E.thread ev
     fr <- head <$> TR.allFrames curThread
     mainArgs <- M.arguments methodMain
     mainArgsValue <- SF.getValue fr (head mainArgs)
@@ -155,7 +155,8 @@ body = do
         E.Breakpoint -> True
         _ -> False
 
-    spr <- ER.enable $ (ER.createStepRequest (E.thread ev) StepLine StepOver)
+    evThread <- E.thread ev
+    spr <- ER.enable $ (ER.createStepRequest evThread StepLine StepOver)
     Vm.resume
     ev1 <- ES.removeEvent
     fieldValues <- mapM (RT.getValue mainClass) (take 2 fields)
@@ -169,7 +170,7 @@ body = do
 
     liftIO . putStrLn $ "===== this Object values ======"
     let evv = head $ ES.events ev1
-    let curThread = E.thread evv
+    curThread <- E.thread evv
     fr1 <- head <$> TR.allFrames curThread
     thisObj <- SF.thisObject fr1
     argsValue <- OR.getValue thisObj (last fields)
@@ -186,7 +187,8 @@ body = do
     liftIO $ putStrLn $ show e0
 
     do
-        v0 <- getValueOfI $ E.thread e0
+        e0thread <- E.thread e0
+        v0 <- getValueOfI e0thread
         liftIO $ putStrLn $ show v0
      `catchError`
         (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
@@ -199,7 +201,8 @@ body = do
     liftIO $ putStrLn $ show e1
 
     do
-        v1 <- getValueOfI $ E.thread e1
+        e1thread <- E.thread e1
+        v1 <- getValueOfI e1thread
         liftIO $ putStrLn $ show v1
      `catchError`
         (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
@@ -218,14 +221,14 @@ printThreadTree = do
 printThreadGroup depth tg = do
     let is = "   "
     let indent = concat $ replicate depth is
-    tgName <- name tg
+    let tgName = name tg
     liftIO $ putStrLn $ indent ++ "Thread group: " ++ tgName
 
     liftIO $ putStrLn $ indent ++ is ++ "Threads: "
     trds <- TG.threads tg
     tstats <- mapM ((show <$>) . TR.status) trds
     tsusps <- mapM ((show <$>) . TR.isSuspended) trds
-    ts <- mapM name trds
+    let ts = map name trds
     let threadStrings = zipWith3 (\a b c -> a ++ " " ++ b ++ " " ++ c) ts tstats tsusps
     liftIO $ putStrLn $ intercalate "\n" $ map ((indent ++ is ++ is) ++ ) threadStrings
 
@@ -234,9 +237,9 @@ printThreadGroup depth tg = do
 
 checkFieldsNames fields = do
     when (length fields /= 3) $ liftIO exitFailure
-    f1name <- name (fields !! 0)
-    f2name <- name (fields !! 1)
-    f3name <- name (fields !! 2)
+    let f1name = name (fields !! 0)
+    let f2name = name (fields !! 1)
+    let f3name = name (fields !! 2)
     when (f1name /= "f1") $ liftIO exitFailure
     when (f2name /= "fprivate") $ liftIO exitFailure
     when (f3name /= "args") $ liftIO exitFailure

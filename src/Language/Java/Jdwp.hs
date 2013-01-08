@@ -482,12 +482,6 @@ method_abstract     = 0x0400
 method_strict       = 0x0800
 method_synthetic    = 0x1000
 
-data ThreadReference = ThreadReference JavaThreadId
-                       deriving (Eq, Show)
-
-data ThreadGroupReference = ThreadGroupReference JavaThreadGroupId
-                            deriving (Eq, Show)
-
 data LineTable = LineTable JavaLong JavaLong [Line] -- start, end, lines
                  deriving (Eq, Show)
 
@@ -901,27 +895,19 @@ parseInterfacesReply idsizes = do
     interfaceCount <- parseInt
     mapM (\_ -> parseReferenceTypeId $ referenceTypeIdSize idsizes) [1..interfaceCount]
 
-parseThreadReference :: IdSizes -> Get ThreadReference
-parseThreadReference idsizes =
-    ThreadReference <$> (parseThreadId $ threadIdSize idsizes)
-
-parseAllThreadsReply :: IdSizes -> Get [ThreadReference]
+parseAllThreadsReply :: IdSizes -> Get [JavaThreadId]
 parseAllThreadsReply idsizes = do
     threadCount <- parseInt
-    mapM (\_ -> parseThreadReference idsizes) [1..threadCount]
+    mapM (\_ -> parseThreadId $ threadIdSize idsizes) [1..threadCount]
 
-parseThreadGroupReference :: IdSizes -> Get ThreadGroupReference
-parseThreadGroupReference idsizes =
-    ThreadGroupReference <$> (parseThreadGroupId $ threadGroupIdSize idsizes)
-
-parseThreadGroupsReply :: IdSizes -> Get [ThreadGroupReference]
+parseThreadGroupsReply :: IdSizes -> Get [JavaThreadGroupId]
 parseThreadGroupsReply idsizes = do
     groupCount <- parseInt
-    mapM (\_ -> parseThreadGroupReference idsizes) [1..groupCount]
+    mapM (\_ -> parseThreadGroupId $ threadGroupIdSize idsizes) [1..groupCount]
 
 parseThreadGroupChildrenReply :: IdSizes
-                              -> Get ( [ThreadReference]
-                                     , [ThreadGroupReference])
+                              -> Get ( [JavaThreadId]
+                                     , [JavaThreadGroupId])
 parseThreadGroupChildrenReply idsizes = do
     thread <- parseAllThreadsReply idsizes
     threadGroups <- parseThreadGroupsReply idsizes
@@ -944,9 +930,9 @@ parseLineTableReply = do
     return $ LineTable start end lines
 
 parseMonitorInfoReply :: IdSizes
-                      -> Get (ThreadReference, JavaInt, [ThreadReference])
+                      -> Get (JavaThreadId, JavaInt, [JavaThreadId])
 parseMonitorInfoReply idsizes = do
-    owner <- parseThreadReference idsizes
+    owner <- parseThreadId $ threadIdSize idsizes
     entryCount <- parseInt
     waiters <- parseAllThreadsReply idsizes
     return (owner, entryCount, waiters)

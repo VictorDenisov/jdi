@@ -67,14 +67,14 @@ module Language.Java.Jdi.Impl
 , StackFrame
 , stackFrameGetValue
 , thisObject
-, J.ThreadReference
+, ThreadReference
 , allFrames
 , frameCount
 , frames
 , threadGroup
 , status
 , isSuspended
-, J.ThreadGroupReference
+, ThreadGroupReference
 , parent
 , threadGroups
 , threads
@@ -285,7 +285,7 @@ initialVmState h = VmState Nothing 0 h S.empty Nothing Nothing
 -- Classes definitions. {{{
 
 class Name a where
-    name :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m String
+    name :: a -> String
 
 class Resumable a where
     resume :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m ()
@@ -365,7 +365,8 @@ allClasses = do
     return classes
 
 -- | Returns a list of the currently running threads.
-allThreads :: MonadIO m => VirtualMachine m [J.ThreadReference]
+allThreads :: (Error e, MonadIO m, MonadError e m)
+           => VirtualMachine m [ThreadReference]
 allThreads = do
     h <- getVmHandle
     idsizes <- getIdSizes
@@ -373,7 +374,7 @@ allThreads = do
     liftIO $ J.sendPacket h $ J.allThreadsCommand cntr
     r <- J.dat `liftM` (liftIO $ J.waitReply h)
     let threads = runGet (J.parseAllThreadsReply idsizes) (J.toLazy r)
-    return threads
+    mapM threadReferenceFromId threads
 
 {- | Determines if the target VM supports the addition
      of methods when performing class redefinition. -}
@@ -510,13 +511,13 @@ suspendVm = runCommand J.suspendVmCommand >> return ()
 
 -- | Returns each thread group which does not have a parent.
 topLevelThreadGroups :: (Error e, MonadIO m, MonadError e m)
-                     => VirtualMachine m [J.ThreadGroupReference]
+                     => VirtualMachine m [ThreadGroupReference]
 topLevelThreadGroups = do
     reply <- runCommand J.topLevelThreadGroupsCommand
     let r = J.dat reply
     idsizes <- getIdSizes
     let groups = runGet (J.parseThreadGroupsReply idsizes) (J.toLazy r)
-    return groups
+    mapM threadGroupReferenceFromId groups
 
 -- }}}
 
@@ -555,19 +556,20 @@ instance RefType J.Event where
  Note that the discussion above does not apply to system threads created by the
  target VM during its normal (non-debug) operation.
 -}
-thread :: J.Event -> J.ThreadReference
+thread :: (Error e, MonadIO m, MonadError e m)
+       => J.Event -> VirtualMachine m ThreadReference
 thread (J.ClassPrepareEvent
             _
             threadId
-            _ _ _ _) = J.ThreadReference threadId
+            _ _ _ _) = threadReferenceFromId threadId
 thread (J.BreakpointEvent
             _
             threadId
-            _) = J.ThreadReference threadId
+            _) = threadReferenceFromId threadId
 thread (J.StepEvent
             _
             threadId
-            _) = J.ThreadReference threadId
+            _) = threadReferenceFromId threadId
 
 -- }}}
 
@@ -601,7 +603,7 @@ data EventRequest = EventRequest
                         EventRequest
                   | ClassPrepareRequest
                   | BreakpointRequest Location
-                  | StepRequest J.ThreadReference J.StepSize J.StepDepth
+                  | StepRequest ThreadReference J.StepSize J.StepDepth
                     deriving (Show, Eq)
 
 enable :: (Error e, MonadIO m, MonadError e m) => EventRequest -> VirtualMachine m EventRequest
@@ -622,7 +624,7 @@ enable (EventRequest suspendPolicy Nothing modifiers request@(BreakpointRequest
     let requestId = runGet J.parseInt (J.toLazy r)
     return $ EventRequest suspendPolicy (Just requestId) modifiers request
 enable (EventRequest suspendPolicy Nothing modifiers request@(StepRequest
-                (J.ThreadReference tId) ss sd)) = do
+                (ThreadReference _ tId) ss sd)) = do
     let modifiers' = (J.Step tId ss sd) : modifiers
     reply <- runCommand $ J.eventSetRequest J.SingleStep suspendPolicy modifiers'
     let r = J.dat reply
@@ -653,7 +655,7 @@ createClassPrepareRequest = EventRequest J.SuspendAll Nothing [] ClassPrepareReq
 createBreakpointRequest :: Location -> EventRequest
 createBreakpointRequest l = EventRequest J.SuspendAll Nothing [] (BreakpointRequest l)
 
-createStepRequest :: J.ThreadReference -> J.StepSize -> J.StepDepth -> EventRequest
+createStepRequest :: ThreadReference -> J.StepSize -> J.StepDepth -> EventRequest
 createStepRequest tr ss sd = EventRequest J.SuspendAll Nothing [] (StepRequest tr ss sd)
 
 -- }}}
@@ -706,7 +708,7 @@ methods rt@(J.ReferenceType _ refId _ _) = do
     return $ map (Method rt) methods
 
 instance Name J.ReferenceType where
-    name = return . signatureToName . signature
+    name = signatureToName . signature
 
 instance SourceName J.ReferenceType where
     sourceName (J.ReferenceType _ refId _ _) = do
@@ -795,8 +797,8 @@ data Value = ArrayValue J.ArrayReference
            | VoidValue
            | BooleanValue Bool
            | StringValue J.StringReference
-           | ThreadValue J.ThreadReference
-           | ThreadGroupValue J.ThreadGroupReference
+           | ThreadValue ThreadReference
+           | ThreadGroupValue ThreadGroupReference
        --    | ClassLoaderValue
        --    | ClassObjectValue
              deriving (Eq, Show)
@@ -822,12 +824,12 @@ toJdiValue (J.ObjectValue objectId) = ObjectValue $ J.ObjectReference objectId
 
 -- StackFrame functions section {{{
 
-data StackFrame = StackFrame J.ThreadReference J.StackFrame
+data StackFrame = StackFrame ThreadReference J.StackFrame
                   deriving (Eq, Show)
 
 stackFrameGetValue :: (Error e, MonadIO m, MonadError e m) =>
             StackFrame -> LocalVariable -> VirtualMachine m Value
-stackFrameGetValue (StackFrame (J.ThreadReference ti) (J.StackFrame fi _))
+stackFrameGetValue (StackFrame (ThreadReference _ ti) (J.StackFrame fi _))
          (LocalVariable _ _ slot) = do
     reply <- runCommand $ J.getValuesCommand ti fi [slot]
     idsizes <- getIdSizes
@@ -841,7 +843,7 @@ instance Locatable StackFrame where
 
 thisObject :: (Error e, MonadIO m, MonadError e m)
            => StackFrame -> VirtualMachine m J.ObjectReference
-thisObject (StackFrame (J.ThreadReference ti) (J.StackFrame fi _)) = do
+thisObject (StackFrame (ThreadReference _ ti) (J.StackFrame fi _)) = do
     reply <- runCommand $ J.thisObjectCommand ti fi
     idsizes <- getIdSizes
     let (ObjectValue ref) = toJdiValue $ runGet
@@ -853,59 +855,73 @@ thisObject (StackFrame (J.ThreadReference ti) (J.StackFrame fi _)) = do
 
 -- ThreadReference functions section {{{
 
-instance Name J.ThreadReference where
-    name (J.ThreadReference refId) = do
-        reply <- runCommand $ J.threadReferenceNameCommand refId
-        let r = J.dat reply
-        let name = runGet J.parseString (J.toLazy r)
-        return name
+                                    --  name     threadId
+data ThreadReference = ThreadReference String J.JavaThreadId
+                       deriving (Eq, Show)
 
-instance Resumable J.ThreadReference where
-    resume (J.ThreadReference tId) = resumeThreadId tId
+threadReferenceFromId :: (Error e, MonadIO m, MonadError e m)
+                      => J.JavaThreadId -> VirtualMachine m ThreadReference
+threadReferenceFromId refId = do
+    reply <- runCommand $ J.threadReferenceNameCommand refId
+    let r = J.dat reply
+    let name = runGet J.parseString (J.toLazy r)
+    return $ ThreadReference name refId
 
-allFrames :: (Error e, MonadIO m, MonadError e m) => J.ThreadReference -> VirtualMachine m [StackFrame]
+instance Name ThreadReference where
+    name (ThreadReference n _) = n
+
+instance Resumable ThreadReference where
+    resume (ThreadReference _ tId) = resumeThreadId tId
+
+allFrames :: (Error e, MonadIO m, MonadError e m)
+          => ThreadReference -> VirtualMachine m [StackFrame]
 allFrames tr = getFrames tr 0 (-1)
 
-frameCount :: (Error e, MonadIO m, MonadError e m) => J.ThreadReference -> VirtualMachine m Int
-frameCount tr@(J.ThreadReference tId) = do
+frameCount :: (Error e, MonadIO m, MonadError e m)
+           => ThreadReference -> VirtualMachine m Int
+frameCount tr@(ThreadReference _ tId) = do
     reply <- runCommand $ J.frameCountCommand tId
     let count = runGet J.parseInt (J.toLazy $ J.dat reply)
     return $ fromIntegral count
 
 frames :: (Error e, MonadIO m, MonadError e m) =>
-          J.ThreadReference -> Int -> Int -> VirtualMachine m [StackFrame]
+          ThreadReference -> Int -> Int -> VirtualMachine m [StackFrame]
 frames tr start len = do
     when (start < 0) $ throwError $ strMsg "negative start"
     when (len < 0) $ throwError $ strMsg "negative len"
     getFrames tr start len
 
 -- This is unsafe implementation of frames command.
-getFrames :: (Error e, MonadIO m, MonadError e m) => J.ThreadReference -> Int -> Int -> VirtualMachine m [StackFrame]
-getFrames tr@(J.ThreadReference ti) start len = do
+getFrames :: (Error e, MonadIO m, MonadError e m)
+          => ThreadReference -> Int -> Int -> VirtualMachine m [StackFrame]
+getFrames tr@(ThreadReference _ ti) start len = do
     idsizes <- getIdSizes
     reply <- runCommand $ J.framesCommand ti (fromIntegral start) (fromIntegral len)
     let r = J.dat reply
     return $ map (StackFrame tr) $ runGet (J.parseStackFrameList idsizes) (J.toLazy r)
 
 threadGroup :: (Error e, MonadIO m, MonadError e m)
-            => J.ThreadReference -> VirtualMachine m J.ThreadGroupReference
-threadGroup tr@(J.ThreadReference ti) = do
+            => ThreadReference -> VirtualMachine m ThreadGroupReference
+threadGroup tr@(ThreadReference _ ti) = do
     idsizes <- getIdSizes
     reply <- runCommand $ J.threadGroupCommand ti
     let r = J.dat reply
-    return $ runGet (J.parseThreadGroupReference idsizes) (J.toLazy r)
+    let groupId = runGet
+                    (J.parseThreadGroupId $ J.threadGroupIdSize idsizes)
+                    (J.toLazy r)
+    threadGroupReferenceFromId groupId
 
 status :: (Error e, MonadIO m, MonadError e m)
-       => J.ThreadReference -> VirtualMachine m J.ThreadStatus
-status tr@(J.ThreadReference ti) = do
+       => ThreadReference -> VirtualMachine m J.ThreadStatus
+status tr@(ThreadReference _ ti) = do
     reply <- runCommand $ J.threadStatusCommand ti
     let r = J.dat reply
     let (threadStatus, _) = runGet J.parseThreadStatusReply (J.toLazy r)
     return threadStatus
 
 isSuspended :: (Error e, MonadIO m, MonadError e m)
-            => J.ThreadReference -> VirtualMachine m Bool
-isSuspended tr@(J.ThreadReference ti) = do
+            => ThreadReference -> VirtualMachine m Bool
+isSuspended tr@(ThreadReference _ ti) = do
     reply <- runCommand $ J.threadStatusCommand ti
     let r = J.dat reply
     let (_, suspendStatus) = runGet J.parseThreadStatusReply (J.toLazy r)
@@ -915,43 +931,55 @@ isSuspended tr@(J.ThreadReference ti) = do
 
 -- ThreadGroupReference functions section {{{
 
-instance Name J.ThreadGroupReference where
-    name (J.ThreadGroupReference refId) = do
-        reply <- runCommand $ J.threadGroupReferenceNameCommand refId
-        let r = J.dat reply
-        return $ runGet J.parseString (J.toLazy r)
+data ThreadGroupReference = ThreadGroupReference String J.JavaThreadGroupId
+                            deriving (Eq, Show)
+
+threadGroupReferenceFromId :: (Error e, MonadIO m, MonadError e m)
+                           => J.JavaThreadGroupId
+                           -> VirtualMachine m ThreadGroupReference
+threadGroupReferenceFromId refId = do
+    reply <- runCommand $ J.threadGroupReferenceNameCommand refId
+    let r = J.dat reply
+    let name = runGet J.parseString (J.toLazy r)
+    return $ ThreadGroupReference name refId
+
+instance Name ThreadGroupReference where
+    name (ThreadGroupReference n _) = n
 
 parent :: (Error e, MonadIO m, MonadError e m)
-       => J.ThreadGroupReference -> VirtualMachine m J.ThreadGroupReference
-parent (J.ThreadGroupReference refId) = do
+       => ThreadGroupReference -> VirtualMachine m ThreadGroupReference
+parent (ThreadGroupReference _ refId) = do
     reply <- runCommand $ J.threadGroupReferenceParentCommand refId
     let r = J.dat reply
     idsizes <- getIdSizes
-    return $ runGet (J.parseThreadGroupReference idsizes) (J.toLazy r)
+    let parentId = runGet
+                    (J.parseThreadGroupId $ J.threadGroupIdSize idsizes)
+                    (J.toLazy r)
+    threadGroupReferenceFromId parentId
 
 threadGroups :: (Error e, MonadIO m, MonadError e m)
-             => J.ThreadGroupReference
-             -> VirtualMachine m [J.ThreadGroupReference]
-threadGroups (J.ThreadGroupReference refId) = do
+             => ThreadGroupReference
+             -> VirtualMachine m [ThreadGroupReference]
+threadGroups (ThreadGroupReference _ refId) = do
     reply <- runCommand $ J.threadGroupReferenceChildrenCommand refId
     let r = J.dat reply
     idsizes <- getIdSizes
     let (_, groups) = runGet
                         (J.parseThreadGroupChildrenReply idsizes)
                         (J.toLazy r)
-    return groups
+    mapM threadGroupReferenceFromId groups
 
 threads :: (Error e, MonadIO m, MonadError e m)
-             => J.ThreadGroupReference
-             -> VirtualMachine m [J.ThreadReference]
-threads (J.ThreadGroupReference refId) = do
+             => ThreadGroupReference
+             -> VirtualMachine m [ThreadReference]
+threads (ThreadGroupReference _ refId) = do
     reply <- runCommand $ J.threadGroupReferenceChildrenCommand refId
     let r = J.dat reply
     idsizes <- getIdSizes
     let (ts, _) = runGet
                         (J.parseThreadGroupChildrenReply idsizes)
                         (J.toLazy r)
-    return ts
+    mapM threadReferenceFromId ts
 
 -- }}}
 
@@ -997,7 +1025,7 @@ objGetValues (J.ObjectReference ri) fs = do
     where getFid (Field _ f) = f
 
 invokeMethod :: J.ObjectReference -- | object
-             -> J.ThreadReference -- | thread
+             -> ThreadReference -- | thread
              -> Method -- | Method
              -> [Value] -- | Arguments
              -> Int -- | Options
@@ -1007,7 +1035,7 @@ invokeMethod = undefined
 isCollected :: J.ObjectReference -> VirtualMachine m Bool
 isCollected = undefined
 
-owningThread :: J.ObjectReference -> VirtualMachine m J.ThreadReference
+owningThread :: J.ObjectReference -> VirtualMachine m ThreadReference
 owningThread = undefined
 
 instance RefType J.ObjectReference where
@@ -1028,7 +1056,7 @@ uniqueId :: J.ObjectReference
          -> VirtualMachine m Int
 uniqueId = undefined
 
-waitingThreads :: J.ObjectReference -> VirtualMachine m [J.ThreadReference]
+waitingThreads :: J.ObjectReference -> VirtualMachine m [ThreadReference]
 waitingThreads = undefined
 
 -- }}}
@@ -1039,7 +1067,7 @@ data Field = Field J.ReferenceType J.Field
               deriving (Eq, Show)
 
 instance Name Field  where
-    name (Field _ (J.Field _ nm _ _)) = return nm
+    name (Field _ (J.Field _ nm _ _)) = nm
 
 instance Accessible Field where
     isPackagePrivate f = not (isPrivate f)
@@ -1079,7 +1107,7 @@ data Method = Method J.ReferenceType J.Method
               deriving (Eq, Show)
 
 instance Name Method where
-    name (Method _ (J.Method _ name _ _)) = return name
+    name (Method _ (J.Method _ name _ _)) = name
 
 instance AllLineLocations Method where
     allLineLocations m@(Method ref method) = do
@@ -1102,7 +1130,7 @@ variables method = getVariables method (<=)
 variablesByName :: (Error e, MonadIO m, MonadError e m) =>
                    Method -> String -> VirtualMachine m [LocalVariable]
 variablesByName method varName =
-    variables method >>= filterM (((varName ==) `liftM`) . name)
+    (filter ((varName ==) . name)) `liftM` (variables method)
 -- }}}
 
 -- LocalVariable functions section {{{
@@ -1111,7 +1139,7 @@ data LocalVariable = LocalVariable J.ReferenceType J.Method J.Slot
                      deriving (Show, Eq)
 
 instance Name LocalVariable where
-    name (LocalVariable _ _ (J.Slot _ nm _ _ _)) = return nm
+    name (LocalVariable _ _ (J.Slot _ nm _ _ _)) = nm
 
 -- }}}
 
