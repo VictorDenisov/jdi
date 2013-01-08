@@ -717,6 +717,12 @@ fields rt@(J.ReferenceType _ refId _ _) = do
     let fields = runGet (J.parseFieldsReply idsizes) (J.toLazy r)
     return $ map (Field rt) fields
 
+{- | Returns a list containing each Method declared directly in this type.
+Inherited methods are not included. Constructors, the initialization method if
+any, and any synthetic methods created by the compiler are included in the list.
+
+For arrays (ArrayType) and primitive classes, the returned list is always empty.
+-}
 methods :: (Error e, MonadIO m, MonadError e m) =>
               J.ReferenceType -> VirtualMachine m [Method]
 methods rt@(J.ReferenceType _ refId _ _) = do
