@@ -799,7 +799,6 @@ data Value = ArrayValue J.ArrayReference
            | StringValue J.StringReference
            | ThreadValue ThreadReference
            | ThreadGroupValue ThreadGroupReference
-           | OtherValue String
        --    | ClassLoaderValue
        --    | ClassObjectValue
              deriving (Eq, Show)
@@ -820,8 +819,6 @@ toJdiValue (J.ArrayValue objectId) = ArrayValue $ J.ArrayReference objectId
 toJdiValue (J.StringValue objectId) = StringValue $ J.StringReference objectId
 
 toJdiValue (J.ObjectValue objectId) = ObjectValue $ J.ObjectReference objectId
-
-toJdiValue x = OtherValue $ show x
 
 -- }}}
 
@@ -846,7 +843,11 @@ instance Locatable StackFrame where
 
 thisObject :: (Error e, MonadIO m, MonadError e m)
            => StackFrame -> VirtualMachine m J.ObjectReference
-thisObject (StackFrame (ThreadReference _ ti) (J.StackFrame fi _)) = do
+thisObject sf@(StackFrame (ThreadReference _ ti) (J.StackFrame fi _)) = do
+    loc <- location sf
+    let mtd = method loc
+    when (isStatic mtd) $
+                throwError $ strMsg "Can get this object for static method"
     reply <- runCommand $ J.thisObjectCommand ti fi
     idsizes <- getIdSizes
     let (ObjectValue ref) = toJdiValue $ runGet
@@ -1134,6 +1135,36 @@ variablesByName :: (Error e, MonadIO m, MonadError e m) =>
                    Method -> String -> VirtualMachine m [LocalVariable]
 variablesByName method varName =
     (filter ((varName ==) . name)) `liftM` (variables method)
+
+instance Accessible Method where
+    isPackagePrivate f = not (isPrivate f)
+                      && not (isProtected f)
+                      && not (isPublic f)
+    isPrivate (Method _ (J.Method _ _ _ modbits))
+                                = (modbits .&. J.method_private) /= 0
+    isProtected (Method _ (J.Method _ _ _ modbits))
+                                = (modbits .&. J.method_protected) /= 0
+    isPublic (Method _ (J.Method _ _ _ modbits))
+                                = (modbits .&. J.method_public) /= 0
+    modifiers (Method _ (J.Method _ _ _ modbits)) = fromIntegral modbits
+
+instance DeclaringType Method where
+    declaringType (Method rt _) = rt
+
+-- TODO needs implementation
+instance GenericSignature Method where
+    genericSignature (Method _ (J.Method _ _ sig _)) = undefined
+
+instance Signature Method where
+    signature (Method _ (J.Method _ _ sig _)) = sig
+
+instance TypeComponent Method where
+    isFinal (Method _ (J.Method _ _ _ modbits))
+                            = (J.method_final .&. modbits) /= 0
+    isStatic (Method _ (J.Method _ _ _ modbits))
+                            = (J.method_static .&. modbits) /= 0
+    isSynthetic (Method _ (J.Method _ _ _ modbits))
+                            = (J.method_synthetic .&. modbits) /= 0
 -- }}}
 
 -- LocalVariable functions section {{{

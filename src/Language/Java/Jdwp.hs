@@ -469,18 +469,18 @@ field_enum         = 0x4000 :: JavaInt
 data Method = Method JavaMethodId String String JavaInt
               deriving (Eq, Show)
 
-method_public       = 0x0001
-method_private      = 0x0002
-method_protected    = 0x0004
-method_static       = 0x0008
-method_final        = 0x0010
-method_synchronized = 0x0020
-method_bridge       = 0x0040
-method_varargs      = 0x0080
-method_native       = 0x0100
-method_abstract     = 0x0400
-method_strict       = 0x0800
-method_synthetic    = 0x1000
+method_public       = 0x0001 :: JavaInt
+method_private      = 0x0002 :: JavaInt
+method_protected    = 0x0004 :: JavaInt
+method_static       = 0x0008 :: JavaInt
+method_final        = 0x0010 :: JavaInt
+method_synchronized = 0x0020 :: JavaInt
+method_bridge       = 0x0040 :: JavaInt
+method_varargs      = 0x0080 :: JavaInt
+method_native       = 0x0100 :: JavaInt
+method_abstract     = 0x0400 :: JavaInt
+method_strict       = 0x0800 :: JavaInt
+method_synthetic    = 0x1000 :: JavaInt
 
 data LineTable = LineTable JavaLong JavaLong [Line] -- start, end, lines
                  deriving (Eq, Show)
