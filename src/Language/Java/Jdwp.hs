@@ -447,6 +447,11 @@ data ReferenceType = ReferenceType
 data ObjectReference = ObjectReference JavaObjectId
                        deriving (Eq, Show)
 
+{- | Provides access to an array object and its components in the target VM.
+Each array component is mirrored by a Value object. The array components, in
+aggregate, are placed in List objects instead of arrays for consistency with
+the rest of the API and for interoperability with other APIs.
+-}
 data ArrayReference = ArrayReference JavaObjectId
                       deriving (Eq, Show)
 
