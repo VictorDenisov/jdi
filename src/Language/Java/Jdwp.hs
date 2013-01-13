@@ -441,6 +441,21 @@ data SuspendStatus = Resumed
                    | Suspended
                      deriving (Eq, Show)
 
+{- | The type of an object in a target VM. ReferenceType encompasses classes,
+interfaces, and array types as defined in The Java Language Specification.
+All ReferenceType objects belong to one of the following subinterfaces:
+ClassType for classes, InterfaceType for interfaces, and ArrayType for arrays.
+Note that primitive classes (for example, the reflected type of Integer.TYPE)
+are represented as ClassType. The VM creates Class objects for all three, so
+from the VM perspective, each ReferenceType maps to a distinct Class object.
+
+ReferenceTypes can be obtained by querying a particular ObjectReference for its
+type or by getting a list of all reference types from the VirtualMachine.
+
+ReferenceType provides access to static type information such as methods and
+fields and provides access to dynamic type information such as the corresponding
+Class object and the classloader.
+-}
 data ReferenceType = ReferenceType
                             TypeTag
                             JavaReferenceTypeId
@@ -448,6 +463,11 @@ data ReferenceType = ReferenceType
                             ClassStatus
                      deriving (Eq, Show)
 
+{- | An object that currently exists in the target VM. An ObjectReference
+mirrors only the object itself and is not specific to any Field or LocalVariable
+to which it is currently assigned. An ObjectReference can have 0 or more
+references from field(s) and/or variable(s).
+-}
 data ObjectReference = ObjectReference JavaObjectId
                        deriving (Eq, Show)
 
@@ -459,6 +479,9 @@ the rest of the API and for interoperability with other APIs.
 data ArrayReference = ArrayReference JavaObjectId
                       deriving (Eq, Show)
 
+{- | A string object from the target VM. A StringReference is an ObjectReference
+with additional access to string-specific information from the target VM.
+-}
 data StringReference = StringReference JavaObjectId
                       deriving (Eq, Show)
 

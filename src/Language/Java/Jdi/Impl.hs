@@ -828,6 +828,9 @@ arrLength arrRef@(J.ArrayReference objId) = do
 
 -- StringReference functions section {{{
 
+{- | Returns the StringReference as a String. The returned string is the
+equivalent of the mirrored string, it can be manipulated like any other string.
+-}
 stringValue :: (Error e, MonadIO m, MonadError e m) =>
                  J.StringReference -> VirtualMachine m String
 stringValue sr@(J.StringReference sid) = do
@@ -877,6 +880,19 @@ toJdiValue (J.ObjectValue objectId) = ObjectValue $ J.ObjectReference objectId
 
 -- StackFrame functions section {{{
 
+{- | The state of one method invocation on a thread's call stack. As a thread
+executes, stack frames are pushed and popped from its call stack as methods are
+invoked and then return. A StackFrame mirrors one such frame from a target VM at
+some point in its thread's execution. The call stack is, then, simply a list of
+StackFrame objects. The call stack can be obtained any time a thread is
+suspended through a call to allFrames function of ThreadReference.
+
+StackFrames provide access to a method's local variables and their current
+values.
+
+The lifetime of a StackFrame is very limited. It is available only for suspended
+threads and becomes invalid once its thread is resumed.
+-}
 data StackFrame = StackFrame ThreadReference J.StackFrame
                   deriving (Eq, Show)
 
@@ -894,6 +910,12 @@ instance Locatable StackFrame where
     location (StackFrame _ (J.StackFrame _ javaLoc))
                         = locationFromJavaLocation javaLoc
 
+{- | Returns the value of 'this' for the current frame. The ObjectReference for
+'this' is only available for non-native instance methods.
+
+Returns: an ObjectReference, or null ObjectReference if the frame represents a
+native or static method.
+-}
 thisObject :: (Error e, MonadIO m, MonadError e m)
            => StackFrame -> VirtualMachine m J.ObjectReference
 thisObject sf@(StackFrame (ThreadReference _ ti) (J.StackFrame fi _)) = do
@@ -1042,18 +1064,50 @@ threads (ThreadGroupReference _ refId) = do
 
 -- ObjectReference functions section {{{
 
+{- | Prevents garbage collection for this object. By default all ObjectReference
+values returned by JDI may be collected at any time the target VM is running.
+A call to this method guarantees that the object will not be collected.
+enableCollection() can be used to allow collection once again.
+
+Calls to this method are counted. Every call to this method requires a
+corresponding call to enableCollection() before garbage collection is
+re-enabled.
+
+Note that while the target VM is suspended, no garbage collection will occur
+because all threads are suspended. The typical examination of variables, fields,
+and arrays during the suspension is safe without explicitly disabling garbage
+collection.
+
+This method should be used sparingly, as it alters the pattern of garbage
+collection in the target VM and, consequently, may result in application
+behavior under the debugger that differs from its non-debugged behavior.
+-}
 disableCollection :: (Error e, MonadIO m, MonadError e m)
                   => J.ObjectReference -> VirtualMachine m ()
 disableCollection (J.ObjectReference refId) = do
     reply <- runCommand $ J.disableCollectionCommand refId
     return ()
 
+{- | Permits garbage collection for this object. By default all ObjectReference
+values returned by JDI may be collected at any time the target VM is running.
+A call to this method is necessary only if garbage collection was previously
+disabled with disableCollection().
+-}
 enableCollection :: (Error e, MonadIO m, MonadError e m)
                  => J.ObjectReference -> VirtualMachine m ()
 enableCollection (J.ObjectReference refId) = do
     reply <- runCommand $ J.enableCollectionCommand refId
     return ()
 
+{- | Returns the number times this object's monitor has been entered by the
+current owning thread. See ownedMonitors function of ThreadReference
+for a definition of ownership.
+
+Not all target VMs support this operation. See canGetMonitorInfo to determine
+if the operation is supported.
+
+Returns: the integer count of the number of entries.
+-}
 entryCount :: (Error e, MonadIO m, MonadError e m)
            => J.ObjectReference -> VirtualMachine m Int
 entryCount (J.ObjectReference refId) = do
