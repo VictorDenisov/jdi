@@ -318,7 +318,11 @@ data EventSet = EventSet
               , events        :: [Event]
               } deriving (Show, Eq)
 
--- requestId, event kind specific data
+{- | An occurrence in a target VM that is of interest to a debugger. Event is
+the data type for all events (examples include BreakpointEvent, ExceptionEvent,
+ClassPrepareEvent type constructors). When an event occurs, an instance of Event
+as a component of an EventSet is enqueued in the VirtualMachine's event queue.
+-}
 data Event = VmStartEvent
                     JavaInt
                     JavaThreadId

@@ -573,6 +573,10 @@ instance Resumable J.EventSet where
                                        $ head events
     resume (J.EventSet J.SuspendNone _) = return ()
 
+{- | Waits forever for the next available event.
+
+Returns: the next EventSet.
+-}
 removeEvent :: MonadIO m => VirtualMachine m J.EventSet
 removeEvent = do
     h <- getVmHandle
@@ -587,6 +591,30 @@ removeEvent = do
 
 -- EventRequest functions section. {{{
 
+{- | Represents a request for notification of an event. Examples include
+BreakpointRequest and ExceptionRequest. When an event occurs for which an
+enabled request is present, an EventSet will be placed on the event queue.
+
+The number of events generated for an event request can be controlled through
+filters. Filters provide additional constraints that an event must satisfy
+before it is placed on the event queue. Multiple filters can be used by making
+multiple calls to filter addition functions such as
+addClassFilter :: EventRequest -> String -> EventRequest. Filters are
+added to an event one at a time only while the event is disabled.
+Multiple filters are applied with CUT-OFF AND, in the order it was added to
+the request. Only events that satisfy all filters are placed in the event queue.
+
+The set of available filters is dependent on the event request, some examples
+of filters are:
+
+    Thread filters allow control over the thread for which events are generated.
+    Class filters allow control over the class in which the event occurs.
+    Instance filters allow control over the instance in which the event occurs.
+    Count filters allow control over the number of times an event is reported.
+
+Filters can dramatically improve debugger performance by reducing the amount of
+event traffic sent from the target VM to the debugger VM.
+-}
 data EventRequest = EventRequest
                         J.SuspendPolicy
                         (Maybe J.JavaInt) -- Id of event request if it's enabled
@@ -1092,6 +1120,9 @@ waitingThreads = undefined
 
 -- Field functions section {{{
 
+{- | A class or instance variable in the target VM. See TypeComponent
+for general information about Field and Method mirrors.
+-}
 data Field = Field J.ReferenceType J.Field
               deriving (Eq, Show)
 
@@ -1132,6 +1163,8 @@ instance TypeComponent Field where
 
 -- Method functions section {{{
 
+{- | A static or instance method in the target VM. See TypeComponent for general
+information about Field and Method mirrors. -}
 data Method = Method J.ReferenceType J.Method
               deriving (Eq, Show)
 
@@ -1148,14 +1181,40 @@ instance Locatable Method where
         (J.LineTable _ _ lines) <- receiveLineTable m
         return $ Location ref method (head lines)
 
+{- | Returns a list containing each LocalVariable that is declared as an
+argument of this method. If local variable information is not available, values
+of actual arguments to method invocations can be obtained by using the function
+getArgumentValues of StackFrame.
+
+Returns: the list of LocalVariable arguments. If there are no arguments,
+a zero-length list is returned.
+-}
 arguments :: (Error e, MonadIO m, MonadError e m) =>
              Method -> VirtualMachine m [LocalVariable]
 arguments method = getVariables method (>)
 
+{- | Returns a list containing each LocalVariable declared in this method.
+The list includes any variable declared in any scope within the method. It may
+contain multiple variables of the same name declared within disjoint scopes.
+Arguments are considered local variables and will be present in the returned
+list. If local variable information is not available, values of actual arguments
+to method invocations can be obtained by using the function getArgumentValues
+of StackFrame.
+
+Returns: the list of LocalVariable objects which mirror local variables declared in
+this method in the target VM. If there are no local variables, a zero-length list is returned.
+-}
 variables :: (Error e, MonadIO m, MonadError e m) =>
              Method -> VirtualMachine m [LocalVariable]
 variables method = getVariables method (<=)
 
+{- | Returns a list containing each LocalVariable of a given name in this
+method. Multiple variables can be returned if the same variable name is used in
+disjoint scopes within the method.
+
+Returns: the list of LocalVariable objects of the given name. If there are no
+matching local variables, a zero-length list is returned.
+-}
 variablesByName :: (Error e, MonadIO m, MonadError e m) =>
                    Method -> String -> VirtualMachine m [LocalVariable]
 variablesByName method varName =
@@ -1194,6 +1253,12 @@ instance TypeComponent Method where
 
 -- LocalVariable functions section {{{
 
+{- | A local variable in the target VM. Each variable declared within a Method
+has its own LocalVariable object. Variables of the same name declared in
+different scopes have different LocalVariable objects. LocalVariables can be
+used alone to retrieve static information about their declaration, or can be
+used in conjunction with a StackFrame to set and get values.
+-}
 data LocalVariable = LocalVariable J.ReferenceType J.Method J.Slot
                      deriving (Show, Eq)
 
@@ -1204,18 +1269,69 @@ instance Name LocalVariable where
 
 -- Location functions section {{{
 
+{- | A point within the executing code of the target VM. Locations are used to
+identify the current position of a suspended thread (analogous to an instruction
+pointer or program counter register in native programs). They are also used to
+identify the position at which to set a breakpoint.
+
+The availability of a line number for a location will depend on the level of
+debugging information available from the target VM.
+
+Several mirror interfaces have locations. Each such mirror extends a Locatable
+interface.
+
+Strata
+
+The source information for a Location is dependent on the stratum which is used.
+A stratum is a source code level within a sequence of translations. For example,
+say the baz program is written in the programming language "Foo" then translated
+to the language "Bar" and finally translated into the Java programming language.
+The Java programming language stratum is named "Java", let's say the other
+strata are named "Foo" and "Bar". A given location (as viewed by the
+sourceName() and lineNumber() methods) might be at line 14 of "baz.foo" in the
+"Foo" stratum, line 23 of "baz.bar" in the "Bar" stratum and line 71 of the
+"Java" stratum. Note that while the Java programming language may have only one
+source file for a reference type, this restriction does not apply to other
+strata - thus each Location should be consulted to determine its source path.
+Queries which do not specify a stratum (sourceName(), sourcePath() and
+lineNumber()) use the VM's default stratum (VirtualMachine.getDefaultStratum()).
+If the specified stratum (whether explicitly specified by a method parameter or
+implicitly as the VM's default) is null or is not available in the declaring
+type, the declaring type's default stratum is used
+(declaringType().defaultStratum()). Note that in the normal case, of code that
+originates as Java programming language source, there will be only one stratum
+("Java") and it will be returned as the default. To determine the available
+strata use ReferenceType.availableStrata().
+
+Only default Java stratum is available in the current JDI version.
+-}
+
 data Location = Location J.ReferenceType J.Method J.Line
                 deriving (Show, Eq)
 
+{- | Gets the code position within this location's method.
+
+Returns: the Int representing the position within the method or -1 if location
+is within a native method.
+-}
 codeIndex :: Location -> Int
 codeIndex (Location _ _ (J.Line ci _)) = fromIntegral ci
 
 instance DeclaringType Location where
     declaringType (Location rt _ _) = rt
 
+{- | Gets the line number of this Location.
+
+This method is equivalent to lineNumber(vm.getDefaultStratum()) - see
+lineNumber(String) for more information.
+
+Returns: an Int specifying the line in the source, returns -1 if the information
+is not available; specifically, always returns -1 for native methods.
+-}
 lineNumber :: Location -> Int
 lineNumber (Location _ _ (J.Line _ ln)) = fromIntegral ln
 
+-- | Gets the method containing this Location.
 method :: Location -> Method
 method (Location refType method _) = Method refType method
 
