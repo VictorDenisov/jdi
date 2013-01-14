@@ -934,8 +934,10 @@ thisObject sf@(StackFrame (ThreadReference _ ti) (J.StackFrame fi _)) = do
 
 -- ThreadReference functions section {{{
 
-                                    --  name     threadId
-data ThreadReference = ThreadReference String J.JavaThreadId
+{- | A thread object from the target VM. A ThreadReference is an ObjectReference
+with additional access to thread-specific information from the target VM.
+-}
+data ThreadReference = ThreadReference String J.JavaThreadId -- name threadId
                        deriving (Eq, Show)
 
 threadReferenceFromId :: (Error e, MonadIO m, MonadError e m)
@@ -952,10 +954,23 @@ instance Name ThreadReference where
 instance Resumable ThreadReference where
     resume (ThreadReference _ tId) = resumeThreadId tId
 
+{- | Returns a List containing each StackFrame in the thread's current call
+stack. The thread must be suspended (normally through an interruption to the VM)
+to get this information, and it is only valid until the thread is resumed again.
+
+Returns: a list of StackFrame with the current frame first followed by each
+caller's frame.
+-}
 allFrames :: (Error e, MonadIO m, MonadError e m)
           => ThreadReference -> VirtualMachine m [StackFrame]
 allFrames tr = getFrames tr 0 (-1)
 
+{- | Returns the number of stack frames in the thread's current call stack. The
+thread must be suspended (normally through an interruption to the VM) to get
+this information, and it is only valid until the thread is resumed again.
+
+Returns: an integer frame count
+-}
 frameCount :: (Error e, MonadIO m, MonadError e m)
            => ThreadReference -> VirtualMachine m Int
 frameCount tr@(ThreadReference _ tId) = do
@@ -963,8 +978,20 @@ frameCount tr@(ThreadReference _ tId) = do
     let count = runGet J.parseInt (J.toLazy $ J.dat reply)
     return $ fromIntegral count
 
+{- | Returns a List containing a range of StackFrame mirrors from the thread's
+current call stack. The thread must be suspended (normally through an
+interruption to the VM) to get this information, and it is only valid until the
+thread is resumed again.
+
+Returns:
+    a List of StackFrame with the current frame first followed by each caller's frame.
+-}
 frames :: (Error e, MonadIO m, MonadError e m) =>
-          ThreadReference -> Int -> Int -> VirtualMachine m [StackFrame]
+          ThreadReference
+          -> Int -- ^ start - the index of the first frame to retrieve.
+                 -- Index 0 represents the current frame.
+          -> Int -- ^ length - the number of frames to retrieve
+          -> VirtualMachine m [StackFrame]
 frames tr start len = do
     when (start < 0) $ throwError $ strMsg "negative start"
     when (len < 0) $ throwError $ strMsg "negative len"
@@ -979,6 +1006,7 @@ getFrames tr@(ThreadReference _ ti) start len = do
     let r = J.dat reply
     return $ map (StackFrame tr) $ runGet (J.parseStackFrameList idsizes) (J.toLazy r)
 
+-- | Returns this thread's thread group.
 threadGroup :: (Error e, MonadIO m, MonadError e m)
             => ThreadReference -> VirtualMachine m ThreadGroupReference
 threadGroup tr@(ThreadReference _ ti) = do
@@ -990,6 +1018,11 @@ threadGroup tr@(ThreadReference _ ti) = do
                     (J.toLazy r)
     threadGroupReferenceFromId groupId
 
+{- | Returns the thread's status. If the thread is not suspended the thread's
+current status is returned. If the thread is suspended, the thread's status
+before the suspension is returned is not available. isSuspended() can be used
+to determine if the thread has been suspended.
+-}
 status :: (Error e, MonadIO m, MonadError e m)
        => ThreadReference -> VirtualMachine m J.ThreadStatus
 status tr@(ThreadReference _ ti) = do
@@ -998,6 +1031,7 @@ status tr@(ThreadReference _ ti) = do
     let (threadStatus, _) = runGet J.parseThreadStatusReply (J.toLazy r)
     return threadStatus
 
+-- | Determines whether the thread has been suspended by the the debugger.
 isSuspended :: (Error e, MonadIO m, MonadError e m)
             => ThreadReference -> VirtualMachine m Bool
 isSuspended tr@(ThreadReference _ ti) = do
@@ -1010,6 +1044,10 @@ isSuspended tr@(ThreadReference _ ti) = do
 
 -- ThreadGroupReference functions section {{{
 
+{- | A thread group object from the target VM. A ThreadGroupReference is an
+ObjectReference with additional access to threadgroup-specific information from
+the target VM.
+-}
 data ThreadGroupReference = ThreadGroupReference String J.JavaThreadGroupId
                             deriving (Eq, Show)
 
@@ -1025,6 +1063,11 @@ threadGroupReferenceFromId refId = do
 instance Name ThreadGroupReference where
     name (ThreadGroupReference n _) = n
 
+{- | Returns the parent of this thread group.
+
+Returns: a ThreadGroupReference mirroring the parent of this thread group
+in the target VM, or null if this is a top-level thread group.
+-}
 parent :: (Error e, MonadIO m, MonadError e m)
        => ThreadGroupReference -> VirtualMachine m ThreadGroupReference
 parent (ThreadGroupReference _ refId) = do
@@ -1036,6 +1079,14 @@ parent (ThreadGroupReference _ refId) = do
                     (J.toLazy r)
     threadGroupReferenceFromId parentId
 
+{- | Returns a List containing each active ThreadGroupReference in this thread
+group. Only the active thread groups in this immediate thread group (and not its
+subgroups) are returned. See java.lang.ThreadGroup for information about
+'active' ThreadGroups.
+
+Returns: a list of ThreadGroupReference objects mirroring the active thread
+groups from this thread group in the target VM.
+-}
 threadGroups :: (Error e, MonadIO m, MonadError e m)
              => ThreadGroupReference
              -> VirtualMachine m [ThreadGroupReference]
@@ -1048,6 +1099,14 @@ threadGroups (ThreadGroupReference _ refId) = do
                         (J.toLazy r)
     mapM threadGroupReferenceFromId groups
 
+{- | Returns a list containing a ThreadReference for each live thread in this
+thread group. Only the live threads in this immediate thread group (and not its
+subgroups) are returned. A thread is alive if it has been started and has not
+yet been stopped.
+
+Returns: a list of ThreadReference objects mirroring the live threads from this
+thread group in the target VM.
+-}
 threads :: (Error e, MonadIO m, MonadError e m)
              => ThreadGroupReference
              -> VirtualMachine m [ThreadReference]
