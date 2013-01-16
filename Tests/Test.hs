@@ -276,4 +276,4 @@ pollEvents stopFunction = do
         then return e
         else pollEvents stopFunction
 
-isMainClass ref = "LMain;" == signature ref
+isMainClass ref = "LMain;" == RT.signature ref

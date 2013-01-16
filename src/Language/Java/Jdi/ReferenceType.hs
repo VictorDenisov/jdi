@@ -6,9 +6,10 @@ module Language.Java.Jdi.ReferenceType
 , interfaces
 , superclass
 , name
+, signature
 ) where
 
-import Language.Java.Jdi.Impl hiding (name)
+import Language.Java.Jdi.Impl hiding (name, signature)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Error (ErrorT, runErrorT, MonadError(..), Error(..))
 
@@ -22,3 +23,6 @@ getValue = refTypeGetValue
 
 name :: ReferenceType -> String
 name = refTypeName
+
+signature :: ReferenceType -> String
+signature = refTypeSignature

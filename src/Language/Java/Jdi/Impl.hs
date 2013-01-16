@@ -5,8 +5,6 @@ module Language.Java.Jdi.Impl
 , Locatable(..)
 , SourceName(..)
 , AllLineLocations(..)
-, GenericSignature(..)
-, Signature(..)
 , Accessible(..)
 , TypeComponent(..)
 , vmName
@@ -52,6 +50,7 @@ module Language.Java.Jdi.Impl
 , J.ReferenceType
 , refTypeName
 , refTypeGetValue
+, refTypeSignature
 , fields
 , methods
 , interfaces
@@ -299,13 +298,6 @@ class AllLineLocations a where
     allLineLocations :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m [Location]
 
 -- | Returns the reference type for which this event was generated.
-class GenericSignature a where
-    genericSignature :: a -> String
-
-class Signature a where
-    signature :: a -> String
-
-
 class Accessible a where
     isPackagePrivate :: a -> Bool
     isPrivate :: a -> Bool
@@ -313,12 +305,10 @@ class Accessible a where
     isPublic :: a -> Bool
     modifiers :: a -> Int
 
-class ( GenericSignature a
-      , Accessible a
-      , Signature a)
-   => TypeComponent a where
+class Accessible a => TypeComponent a where
     name :: a -> String
     declaringType :: a -> J.ReferenceType
+    signature :: a -> String
     isFinal :: a -> Bool
     isStatic :: a -> Bool
     isSynthetic :: a -> Bool
@@ -703,8 +693,8 @@ createStepRequest tr ss sd = EventRequest J.SuspendAll Nothing [] (StepRequest t
 
 -- ReferenceType functions section {{{
 
-instance Signature J.ReferenceType where
-    signature (J.ReferenceType _ _ gs _) = gs
+refTypeSignature :: J.ReferenceType -> String
+refTypeSignature (J.ReferenceType _ _ gs _) = gs
 
 {- | Gets the Value of a given static Field in this type. The Field must be
 valid for this type; that is, it must be declared in this type, a superclass,
@@ -755,7 +745,7 @@ methods rt@(J.ReferenceType _ refId _ _) = do
     return $ map (Method rt) methods
 
 refTypeName :: J.ReferenceType -> String
-refTypeName = signatureToName . signature
+refTypeName = signatureToName . refTypeSignature
 
 instance SourceName J.ReferenceType where
     sourceName (J.ReferenceType _ refId _ _) = do
@@ -1242,17 +1232,12 @@ instance Accessible Field where
                                 = (modbits .&. J.field_public) /= 0
     modifiers (Field _ (J.Field _ _ _ modbits)) = fromIntegral modbits
 
--- TODO needs implementation
-instance GenericSignature Field where
-    genericSignature (Field _ (J.Field _ _ sig _)) = undefined
-
-instance Signature Field where
-    signature (Field _ (J.Field _ _ sig _)) = sig
-
 instance TypeComponent Field where
     name (Field _ (J.Field _ nm _ _)) = nm
 
     declaringType (Field rt _) = rt
+
+    signature (Field _ (J.Field _ _ sig _)) = sig
 
     isFinal (Field _ (J.Field _ _ _ modbits))
                             = (J.field_final .&. modbits) /= 0
@@ -1331,18 +1316,13 @@ instance Accessible Method where
                                 = (modbits .&. J.method_public) /= 0
     modifiers (Method _ (J.Method _ _ _ modbits)) = fromIntegral modbits
 
--- TODO needs implementation
-instance GenericSignature Method where
-    genericSignature (Method _ (J.Method _ _ sig _)) = undefined
-
-instance Signature Method where
-    signature (Method _ (J.Method _ _ sig _)) = sig
-
 instance TypeComponent Method where
 
     name (Method _ (J.Method _ name _ _)) = name
 
     declaringType (Method rt _) = rt
+
+    signature (Method _ (J.Method _ _ sig _)) = sig
 
     isFinal (Method _ (J.Method _ _ _ modbits))
                             = (J.method_final .&. modbits) /= 0

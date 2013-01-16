@@ -3,8 +3,6 @@ module Language.Java.Jdi
 , Locatable(..)
 , SourceName(..)
 , AllLineLocations(..)
-, GenericSignature(..)
-, Signature(..)
 , Accessible(..)
 , TypeComponent(..)
 , StepSize(..)
