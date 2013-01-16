@@ -5,9 +5,10 @@ module Language.Java.Jdi.ReferenceType
 , methods
 , interfaces
 , superclass
+, name
 ) where
 
-import Language.Java.Jdi.Impl
+import Language.Java.Jdi.Impl hiding (name)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Error (ErrorT, runErrorT, MonadError(..), Error(..))
 
@@ -18,3 +19,6 @@ superinterface, or an implemented interface.
 getValue :: (Error e, MonadIO m, MonadError e m) =>
                    ReferenceType -> Field -> VirtualMachine m Value
 getValue = refTypeGetValue
+
+name :: ReferenceType -> String
+name = refTypeName

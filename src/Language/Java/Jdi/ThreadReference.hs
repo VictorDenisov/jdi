@@ -6,6 +6,10 @@ module Language.Java.Jdi.ThreadReference
 , threadGroup
 , status
 , isSuspended
+, name
 ) where
 
-import Language.Java.Jdi.Impl
+import Language.Java.Jdi.Impl hiding (name)
+
+name :: ThreadReference -> String
+name = threadRefName

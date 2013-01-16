@@ -1,7 +1,6 @@
 module Language.Java.Jdi.Impl
 ( VirtualMachine
 , runVirtualMachine
-, Name(..)
 , Resumable(..)
 , Locatable(..)
 , SourceName(..)
@@ -52,6 +51,7 @@ module Language.Java.Jdi.Impl
 , createBreakpointRequest
 , createStepRequest
 , J.ReferenceType
+, refTypeName
 , refTypeGetValue
 , fields
 , methods
@@ -68,6 +68,7 @@ module Language.Java.Jdi.Impl
 , stackFrameGetValue
 , thisObject
 , ThreadReference
+, threadRefName
 , allFrames
 , frameCount
 , frames
@@ -75,6 +76,7 @@ module Language.Java.Jdi.Impl
 , status
 , isSuspended
 , ThreadGroupReference
+, threadGroupRefName
 , parent
 , threadGroups
 , threads
@@ -94,6 +96,7 @@ module Language.Java.Jdi.Impl
 , variables
 , variablesByName
 , LocalVariable
+, localVariableName
 , Location
 , codeIndex
 , lineNumber
@@ -283,10 +286,6 @@ initialVmState h = VmState Nothing 0 h S.empty Nothing Nothing
 -- }}}
 
 -- Classes definitions. {{{
-
-class Name a where
-    name :: a -> String
-
 class Resumable a where
     resume :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m ()
 
@@ -309,6 +308,7 @@ class GenericSignature a where
 class Signature a where
     signature :: a -> String
 
+
 class Accessible a where
     isPackagePrivate :: a -> Bool
     isPrivate :: a -> Bool
@@ -316,12 +316,12 @@ class Accessible a where
     isPublic :: a -> Bool
     modifiers :: a -> Int
 
-class ( Name a
-      , DeclaringType a
+class ( DeclaringType a
       , GenericSignature a
       , Accessible a
       , Signature a)
    => TypeComponent a where
+    name :: a -> String
     isFinal :: a -> Bool
     isStatic :: a -> Bool
     isSynthetic :: a -> Bool
@@ -757,8 +757,8 @@ methods rt@(J.ReferenceType _ refId _ _) = do
     let methods = runGet (J.parseMethodsReply idsizes) (J.toLazy r)
     return $ map (Method rt) methods
 
-instance Name J.ReferenceType where
-    name = signatureToName . signature
+refTypeName :: J.ReferenceType -> String
+refTypeName = signatureToName . signature
 
 instance SourceName J.ReferenceType where
     sourceName (J.ReferenceType _ refId _ _) = do
@@ -945,8 +945,8 @@ threadReferenceFromId refId = do
     let name = runGet J.parseString (J.toLazy r)
     return $ ThreadReference name refId
 
-instance Name ThreadReference where
-    name (ThreadReference n _) = n
+threadRefName :: ThreadReference -> String
+threadRefName (ThreadReference n _) = n
 
 instance Resumable ThreadReference where
     resume (ThreadReference _ tId) = resumeThreadId tId
@@ -1057,8 +1057,8 @@ threadGroupReferenceFromId refId = do
     let name = runGet J.parseString (J.toLazy r)
     return $ ThreadGroupReference name refId
 
-instance Name ThreadGroupReference where
-    name (ThreadGroupReference n _) = n
+threadGroupRefName :: ThreadGroupReference -> String
+threadGroupRefName (ThreadGroupReference n _) = n
 
 {- | Returns the parent of this thread group.
 
@@ -1233,9 +1233,6 @@ for general information about Field and Method mirrors.
 data Field = Field J.ReferenceType J.Field
               deriving (Eq, Show)
 
-instance Name Field  where
-    name (Field _ (J.Field _ nm _ _)) = nm
-
 instance Accessible Field where
     isPackagePrivate f = not (isPrivate f)
                       && not (isProtected f)
@@ -1259,6 +1256,8 @@ instance Signature Field where
     signature (Field _ (J.Field _ _ sig _)) = sig
 
 instance TypeComponent Field where
+    name (Field _ (J.Field _ nm _ _)) = nm
+
     isFinal (Field _ (J.Field _ _ _ modbits))
                             = (J.field_final .&. modbits) /= 0
     isStatic (Field _ (J.Field _ _ _ modbits))
@@ -1274,9 +1273,6 @@ instance TypeComponent Field where
 information about Field and Method mirrors. -}
 data Method = Method J.ReferenceType J.Method
               deriving (Eq, Show)
-
-instance Name Method where
-    name (Method _ (J.Method _ name _ _)) = name
 
 instance AllLineLocations Method where
     allLineLocations m@(Method ref method) = do
@@ -1325,7 +1321,7 @@ matching local variables, a zero-length list is returned.
 variablesByName :: (Error e, MonadIO m, MonadError e m) =>
                    Method -> String -> VirtualMachine m [LocalVariable]
 variablesByName method varName =
-    (filter ((varName ==) . name)) `liftM` (variables method)
+    (filter ((varName ==) . localVariableName)) `liftM` (variables method)
 
 instance Accessible Method where
     isPackagePrivate f = not (isPrivate f)
@@ -1350,6 +1346,9 @@ instance Signature Method where
     signature (Method _ (J.Method _ _ sig _)) = sig
 
 instance TypeComponent Method where
+
+    name (Method _ (J.Method _ name _ _)) = name
+
     isFinal (Method _ (J.Method _ _ _ modbits))
                             = (J.method_final .&. modbits) /= 0
     isStatic (Method _ (J.Method _ _ _ modbits))
@@ -1369,8 +1368,8 @@ used in conjunction with a StackFrame to set and get values.
 data LocalVariable = LocalVariable J.ReferenceType J.Method J.Slot
                      deriving (Show, Eq)
 
-instance Name LocalVariable where
-    name (LocalVariable _ _ (J.Slot _ nm _ _ _)) = nm
+localVariableName :: LocalVariable -> String
+localVariableName (LocalVariable _ _ (J.Slot _ nm _ _ _)) = nm
 
 -- }}}
 

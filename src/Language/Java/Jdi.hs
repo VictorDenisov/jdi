@@ -1,6 +1,5 @@
 module Language.Java.Jdi
-( Name(..)
-, Resumable(..)
+( Resumable(..)
 , Locatable(..)
 , SourceName(..)
 , AllLineLocations(..)

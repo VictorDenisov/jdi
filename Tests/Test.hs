@@ -47,7 +47,7 @@ body = do
         _ -> False
 
     classes <- Vm.allClasses
-    let cNames = map name classes
+    let cNames = map RT.name classes
     liftIO . putStrLn $ intercalate "\n" cNames
     threads <- Vm.allThreads
     liftIO . putStrLn $ intercalate "\n" (map show threads)
@@ -86,7 +86,7 @@ body = do
     liftIO . putStrLn $ intercalate "\n" (map show methods)
     liftIO . putStrLn =<< Vm.name
     liftIO . putStrLn $ name $ head methods
-    forM_ threads (\thread -> liftIO . putStrLn $ name thread)
+    forM_ threads (\thread -> liftIO . putStrLn $ TR.name thread)
     let isMainMethod = ("main" ==) . name
     let isRunMethod = ("run" ==) . name
     let methodMain = head $ filter isMainMethod methods
@@ -221,14 +221,14 @@ printThreadTree = do
 printThreadGroup depth tg = do
     let is = "   "
     let indent = concat $ replicate depth is
-    let tgName = name tg
+    let tgName = TG.name tg
     liftIO $ putStrLn $ indent ++ "Thread group: " ++ tgName
 
     liftIO $ putStrLn $ indent ++ is ++ "Threads: "
     trds <- TG.threads tg
     tstats <- mapM ((show <$>) . TR.status) trds
     tsusps <- mapM ((show <$>) . TR.isSuspended) trds
-    let ts = map name trds
+    let ts = map TR.name trds
     let threadStrings = zipWith3 (\a b c -> a ++ " " ++ b ++ " " ++ c) ts tstats tsusps
     liftIO $ putStrLn $ intercalate "\n" $ map ((indent ++ is ++ is) ++ ) threadStrings
 
