@@ -7,6 +7,7 @@ module Language.Java.Jdi.ReferenceType
 , superclass
 , name
 , signature
+, allLineLocations
 ) where
 
 import Language.Java.Jdi.Impl hiding (name, signature)
@@ -26,3 +27,7 @@ name = refTypeName
 
 signature :: ReferenceType -> String
 signature = refTypeSignature
+
+allLineLocations :: (Error e, MonadIO m, MonadError e m)
+                 => ReferenceType -> VirtualMachine m [Location]
+allLineLocations = refTypeAllLineLocations

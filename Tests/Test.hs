@@ -119,12 +119,12 @@ body = do
      `catchError`
             (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
     liftIO . putStrLn $ "Printing line table"
-    lineTable <- allLineLocations methodMain
+    lineTable <- M.allLineLocations methodMain
     liftIO . putStrLn $ "After line table"
     mainLocation <- location methodMain
     runLocation <- location runMethod
     liftIO . putStrLn $ intercalate "\n" (map show lineTable)
-    classLineLocations <- allLineLocations mainClass
+    classLineLocations <- RT.allLineLocations mainClass
     liftIO . putStrLn $ intercalate "\n" (map show classLineLocations)
     liftIO . putStrLn $ "Enabling breakpoint request"
     bpr <- ER.enable $ ER.createBreakpointRequest mainLocation

@@ -4,7 +4,6 @@ module Language.Java.Jdi.Impl
 , Resumable(..)
 , Locatable(..)
 , SourceName(..)
-, AllLineLocations(..)
 , Accessible(..)
 , TypeComponent(..)
 , vmName
@@ -51,6 +50,7 @@ module Language.Java.Jdi.Impl
 , refTypeName
 , refTypeGetValue
 , refTypeSignature
+, refTypeAllLineLocations
 , fields
 , methods
 , interfaces
@@ -93,6 +93,7 @@ module Language.Java.Jdi.Impl
 , arguments
 , variables
 , variablesByName
+, methodAllLineLocations
 , LocalVariable
 , localVariableName
 , Location
@@ -293,9 +294,6 @@ class Locatable a where
 
 class SourceName a where
     sourceName :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m String
-
-class AllLineLocations a where
-    allLineLocations :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m [Location]
 
 -- | Returns the reference type for which this event was generated.
 class Accessible a where
@@ -754,8 +752,10 @@ instance SourceName J.ReferenceType where
         let sourceName = runGet J.parseString (J.toLazy r)
         return sourceName
 
-instance AllLineLocations J.ReferenceType where
-    allLineLocations refType = concat `liftM` ((mapM allLineLocations) =<< (methods refType))
+refTypeAllLineLocations :: (Error e, MonadIO m, MonadError e m)
+                        => J.ReferenceType -> VirtualMachine m [Location]
+refTypeAllLineLocations refType =
+    concat `liftM` ((mapM methodAllLineLocations) =<< (methods refType))
 
 -- For interfaces returns interfaces extended by this interface.
 interfaces :: (Error e, MonadIO m, MonadError e m) =>
@@ -1255,8 +1255,9 @@ information about Field and Method mirrors. -}
 data Method = Method J.ReferenceType J.Method
               deriving (Eq, Show)
 
-instance AllLineLocations Method where
-    allLineLocations m@(Method ref method) = do
+methodAllLineLocations :: (Error e, MonadIO m, MonadError e m)
+                        => Method -> VirtualMachine m [Location]
+methodAllLineLocations m@(Method ref method) = do
         (J.LineTable _ _ lines) <- receiveLineTable m
         return $ map (Location ref method) lines
 
@@ -1459,7 +1460,7 @@ locationFromJavaLocation (J.JavaLocation typeTag refId methodId index) = do
     rt <- referenceTypeFromRefId typeTag refId
     methodList <- methods rt
     let (Just method) = find isMyMethod methodList
-    al <- allLineLocations method
+    al <- methodAllLineLocations method
     return $ last $ filter (lessThanIndex index) al
     where
         isMyMethod (Method _ (J.Method id _ _ _)) = id == methodId
