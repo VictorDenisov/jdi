@@ -6,4 +6,7 @@ module Language.Java.Jdi.Location
 , method
 ) where
 
-import Language.Java.Jdi.Impl
+import Language.Java.Jdi.Impl hiding (declaringType)
+
+declaringType :: Location -> ReferenceType
+declaringType = locationDeclaringType

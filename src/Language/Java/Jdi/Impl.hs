@@ -5,7 +5,6 @@ module Language.Java.Jdi.Impl
 , Locatable(..)
 , SourceName(..)
 , AllLineLocations(..)
-, DeclaringType(..)
 , GenericSignature(..)
 , Signature(..)
 , Accessible(..)
@@ -99,6 +98,7 @@ module Language.Java.Jdi.Impl
 , localVariableName
 , Location
 , codeIndex
+, locationDeclaringType
 , lineNumber
 , method
 , J.SuspendPolicy(..)
@@ -299,9 +299,6 @@ class AllLineLocations a where
     allLineLocations :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m [Location]
 
 -- | Returns the reference type for which this event was generated.
-class DeclaringType a where
-    declaringType :: a -> J.ReferenceType
-
 class GenericSignature a where
     genericSignature :: a -> String
 
@@ -316,12 +313,12 @@ class Accessible a where
     isPublic :: a -> Bool
     modifiers :: a -> Int
 
-class ( DeclaringType a
-      , GenericSignature a
+class ( GenericSignature a
       , Accessible a
       , Signature a)
    => TypeComponent a where
     name :: a -> String
+    declaringType :: a -> J.ReferenceType
     isFinal :: a -> Bool
     isStatic :: a -> Bool
     isSynthetic :: a -> Bool
@@ -1245,9 +1242,6 @@ instance Accessible Field where
                                 = (modbits .&. J.field_public) /= 0
     modifiers (Field _ (J.Field _ _ _ modbits)) = fromIntegral modbits
 
-instance DeclaringType Field where
-    declaringType (Field rt _) = rt
-
 -- TODO needs implementation
 instance GenericSignature Field where
     genericSignature (Field _ (J.Field _ _ sig _)) = undefined
@@ -1257,6 +1251,8 @@ instance Signature Field where
 
 instance TypeComponent Field where
     name (Field _ (J.Field _ nm _ _)) = nm
+
+    declaringType (Field rt _) = rt
 
     isFinal (Field _ (J.Field _ _ _ modbits))
                             = (J.field_final .&. modbits) /= 0
@@ -1335,9 +1331,6 @@ instance Accessible Method where
                                 = (modbits .&. J.method_public) /= 0
     modifiers (Method _ (J.Method _ _ _ modbits)) = fromIntegral modbits
 
-instance DeclaringType Method where
-    declaringType (Method rt _) = rt
-
 -- TODO needs implementation
 instance GenericSignature Method where
     genericSignature (Method _ (J.Method _ _ sig _)) = undefined
@@ -1348,6 +1341,8 @@ instance Signature Method where
 instance TypeComponent Method where
 
     name (Method _ (J.Method _ name _ _)) = name
+
+    declaringType (Method rt _) = rt
 
     isFinal (Method _ (J.Method _ _ _ modbits))
                             = (J.method_final .&. modbits) /= 0
@@ -1423,8 +1418,8 @@ is within a native method.
 codeIndex :: Location -> Int
 codeIndex (Location _ _ (J.Line ci _)) = fromIntegral ci
 
-instance DeclaringType Location where
-    declaringType (Location rt _ _) = rt
+locationDeclaringType :: Location -> J.ReferenceType
+locationDeclaringType (Location rt _ _) = rt
 
 {- | Gets the line number of this Location.
 

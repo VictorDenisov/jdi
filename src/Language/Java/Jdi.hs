@@ -3,7 +3,6 @@ module Language.Java.Jdi
 , Locatable(..)
 , SourceName(..)
 , AllLineLocations(..)
-, DeclaringType(..)
 , GenericSignature(..)
 , Signature(..)
 , Accessible(..)
