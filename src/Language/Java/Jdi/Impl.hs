@@ -6,7 +6,6 @@ module Language.Java.Jdi.Impl
 , Locatable(..)
 , SourceName(..)
 , AllLineLocations(..)
-, RefType(..)
 , DeclaringType(..)
 , GenericSignature(..)
 , Signature(..)
@@ -40,6 +39,7 @@ module Language.Java.Jdi.Impl
 , topLevelThreadGroups
 , J.Event
 , thread
+, referenceType
 , J.EventKind(..)
 , J.eventKind
 , J.EventSet(..)
@@ -300,9 +300,6 @@ class AllLineLocations a where
     allLineLocations :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m [Location]
 
 -- | Returns the reference type for which this event was generated.
-class RefType a where
-    referenceType :: a -> J.ReferenceType
-
 class DeclaringType a where
     declaringType :: a -> J.ReferenceType
 
@@ -521,18 +518,18 @@ instance Locatable J.Event where
     location (J.StepEvent _ _ javaLocation) =
         locationFromJavaLocation javaLocation
 
-instance RefType J.Event where
-    referenceType (J.ClassPrepareEvent
-                    _
-                    threadId
-                    typeTag
-                    typeId
-                    signature
-                    classStatus) = J.ReferenceType
-                                            typeTag
-                                            typeId
-                                            signature
-                                            classStatus
+referenceType :: J.Event -> J.ReferenceType
+referenceType (J.ClassPrepareEvent
+                _
+                threadId
+                typeTag
+                typeId
+                signature
+                classStatus) = J.ReferenceType
+                                        typeTag
+                                        typeId
+                                        signature
+                                        classStatus
 
 {- | Returns the thread in which this event has occurred.
 
@@ -1207,9 +1204,6 @@ isCollected = undefined
 
 owningThread :: J.ObjectReference -> VirtualMachine m ThreadReference
 owningThread = undefined
-
-instance RefType J.ObjectReference where
-    referenceType = undefined
 
 referringObjects :: J.ObjectReference
                  -> Int

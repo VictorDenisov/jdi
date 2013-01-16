@@ -43,7 +43,7 @@ body = do
     liftIO . putStrLn $ show rd
 
     pollEvents $ \e -> case E.eventKind e of
-        E.ClassPrepare -> isMainClass $ referenceType e
+        E.ClassPrepare -> isMainClass $ E.referenceType e
         _ -> False
 
     classes <- Vm.allClasses
