@@ -1,6 +1,5 @@
 module Language.Java.Jdi
-( Resumable(..)
-, Locatable(..)
+( Locatable(..)
 , Accessible(..)
 , TypeComponent(..)
 , StepSize(..)

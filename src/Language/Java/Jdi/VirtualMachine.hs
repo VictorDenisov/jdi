@@ -29,7 +29,7 @@ module Language.Java.Jdi.VirtualMachine
 , topLevelThreadGroups
 ) where
 
-import Language.Java.Jdi.Impl hiding (name, resume)
+import Language.Java.Jdi.Impl hiding (name)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Error (ErrorT, runErrorT, MonadError(..), Error(..))
 

@@ -1,7 +1,6 @@
 module Language.Java.Jdi.Impl
 ( VirtualMachine
 , runVirtualMachine
-, Resumable(..)
 , Locatable(..)
 , Accessible(..)
 , TypeComponent(..)
@@ -38,6 +37,7 @@ module Language.Java.Jdi.Impl
 , J.eventKind
 , J.EventSet(..)
 , removeEvent
+, resumeEventSet
 , EventRequest
 , enable
 , disable
@@ -73,6 +73,7 @@ module Language.Java.Jdi.Impl
 , threadGroup
 , status
 , isSuspended
+, resumeThreadRef
 , ThreadGroupReference
 , threadGroupRefName
 , parent
@@ -287,9 +288,6 @@ initialVmState h = VmState Nothing 0 h S.empty Nothing Nothing
 -- }}}
 
 -- Classes definitions. {{{
-class Resumable a where
-    resume :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m ()
-
 class Locatable a where
     location :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m Location
 
@@ -545,13 +543,14 @@ thread (J.StepEvent
 -- }}}
 
 -- EventSet functions section {{{
-instance Resumable J.EventSet where
-    resume (J.EventSet J.SuspendAll _) = resumeVm
-    resume (J.EventSet J.SuspendEventThread events)
-                                       = resumeThreadId
-                                       $ J.threadId
-                                       $ head events
-    resume (J.EventSet J.SuspendNone _) = return ()
+resumeEventSet :: (Error e, MonadIO m, MonadError e m)
+               => J.EventSet -> VirtualMachine m ()
+resumeEventSet (J.EventSet J.SuspendAll _) = resumeVm
+resumeEventSet (J.EventSet J.SuspendEventThread events)
+                                   = resumeThreadId
+                                   $ J.threadId
+                                   $ head events
+resumeEventSet (J.EventSet J.SuspendNone _) = return ()
 
 {- | Waits forever for the next available event.
 
@@ -934,8 +933,9 @@ threadReferenceFromId refId = do
 threadRefName :: ThreadReference -> String
 threadRefName (ThreadReference n _) = n
 
-instance Resumable ThreadReference where
-    resume (ThreadReference _ tId) = resumeThreadId tId
+resumeThreadRef :: (Error e, MonadIO m, MonadError e m)
+               => ThreadReference -> VirtualMachine m ()
+resumeThreadRef (ThreadReference _ tId) = resumeThreadId tId
 
 {- | Returns a List containing each StackFrame in the thread's current call
 stack. The thread must be suspended (normally through an interruption to the VM)
