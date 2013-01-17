@@ -3,7 +3,6 @@ module Language.Java.Jdi.Impl
 , runVirtualMachine
 , Resumable(..)
 , Locatable(..)
-, SourceName(..)
 , Accessible(..)
 , TypeComponent(..)
 , vmName
@@ -51,6 +50,7 @@ module Language.Java.Jdi.Impl
 , refTypeGetValue
 , refTypeSignature
 , refTypeAllLineLocations
+, refTypeSourceName
 , fields
 , methods
 , interfaces
@@ -99,6 +99,7 @@ module Language.Java.Jdi.Impl
 , Location
 , codeIndex
 , locationDeclaringType
+, locationSourceName
 , lineNumber
 , method
 , J.SuspendPolicy(..)
@@ -291,9 +292,6 @@ class Resumable a where
 
 class Locatable a where
     location :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m Location
-
-class SourceName a where
-    sourceName :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m String
 
 -- | Returns the reference type for which this event was generated.
 class Accessible a where
@@ -745,12 +743,13 @@ methods rt@(J.ReferenceType _ refId _ _) = do
 refTypeName :: J.ReferenceType -> String
 refTypeName = signatureToName . refTypeSignature
 
-instance SourceName J.ReferenceType where
-    sourceName (J.ReferenceType _ refId _ _) = do
-        reply <- runCommand $ J.sourceFileCommand refId
-        let r = J.dat reply
-        let sourceName = runGet J.parseString (J.toLazy r)
-        return sourceName
+refTypeSourceName :: (Error e, MonadIO m, MonadError e m)
+                  => J.ReferenceType -> VirtualMachine m String
+refTypeSourceName (J.ReferenceType _ refId _ _) = do
+    reply <- runCommand $ J.sourceFileCommand refId
+    let r = J.dat reply
+    let sourceName = runGet J.parseString (J.toLazy r)
+    return sourceName
 
 refTypeAllLineLocations :: (Error e, MonadIO m, MonadError e m)
                         => J.ReferenceType -> VirtualMachine m [Location]
@@ -1417,8 +1416,9 @@ lineNumber (Location _ _ (J.Line _ ln)) = fromIntegral ln
 method :: Location -> Method
 method (Location refType method _) = Method refType method
 
-instance SourceName Location where
-    sourceName (Location ref _ _) = sourceName ref
+locationSourceName :: (Error e, MonadIO m, MonadError e m)
+                   => Location -> VirtualMachine m String
+locationSourceName (Location ref _ _) = refTypeSourceName ref
 
 -- }}}
 

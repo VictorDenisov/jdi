@@ -8,6 +8,7 @@ module Language.Java.Jdi.ReferenceType
 , name
 , signature
 , allLineLocations
+, sourceName
 ) where
 
 import Language.Java.Jdi.Impl hiding (name, signature)
@@ -31,3 +32,7 @@ signature = refTypeSignature
 allLineLocations :: (Error e, MonadIO m, MonadError e m)
                  => ReferenceType -> VirtualMachine m [Location]
 allLineLocations = refTypeAllLineLocations
+
+sourceName :: (Error e , MonadIO m, MonadError e m)
+           => ReferenceType -> VirtualMachine m String
+sourceName = refTypeSourceName
