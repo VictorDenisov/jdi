@@ -755,13 +755,6 @@ threadReferenceFromId refId = do
     let name = runGet J.parseString (J.toLazy r)
     return $ ThreadReference name refId
 
-threadRefName :: ThreadReference -> String
-threadRefName (ThreadReference n _) = n
-
-resumeThreadRef :: (Error e, MonadIO m, MonadError e m)
-               => ThreadReference -> VirtualMachine m ()
-resumeThreadRef (ThreadReference _ tId) = resumeThreadId tId
-
 {- | Returns a List containing each StackFrame in the thread's current call
 stack. The thread must be suspended (normally through an interruption to the VM)
 to get this information, and it is only valid until the thread is resumed again.
