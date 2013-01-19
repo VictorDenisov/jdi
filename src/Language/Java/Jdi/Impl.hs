@@ -659,15 +659,6 @@ arrLength arrRef@(J.ArrayReference objId) = do
 
 -- StringReference functions section {{{
 
-{- | Returns the StringReference as a String. The returned string is the
-equivalent of the mirrored string, it can be manipulated like any other string.
--}
-stringValue :: (Error e, MonadIO m, MonadError e m) =>
-                 J.StringReference -> VirtualMachine m String
-stringValue sr@(J.StringReference sid) = do
-    reply <- runCommand $ J.stringValueCommand sid
-    return $ runGet J.parseString (J.toLazy $ J.dat reply)
-
 -- }}}
 
 -- Value functions section {{{

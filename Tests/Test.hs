@@ -147,7 +147,7 @@ body = do
     case mainArgsValue of
         V.ArrayValue arrV -> do
             (V.StringValue aV) <- AR.getValue arrV 0
-            sV <- SR.stringValue aV
+            sV <- SR.value aV
             liftIO $ putStrLn sV
         otherwise  -> liftIO $ putStrLn "Not array value"
 
@@ -255,7 +255,7 @@ checkFieldValues fieldValues = do
 
 intValue (V.IntValue v) = v
 
-strValue (V.StringValue sv) = SR.stringValue sv
+strValue (V.StringValue sv) = SR.value sv
 
 getValueOfI curThread = do
     frCnt <- TR.frameCount curThread

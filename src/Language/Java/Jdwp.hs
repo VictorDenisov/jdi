@@ -479,8 +479,9 @@ the rest of the API and for interoperability with other APIs.
 data ArrayReference = ArrayReference JavaObjectId
                       deriving (Eq, Show)
 
-{- | A string object from the target VM. A StringReference is an ObjectReference
-with additional access to string-specific information from the target VM.
+{- | A string object from the target VM. A 'StringReference' is an
+'ObjectReference' with additional access to string-specific information from
+the target VM.
 -}
 data StringReference = StringReference JavaObjectId
                       deriving (Eq, Show)
