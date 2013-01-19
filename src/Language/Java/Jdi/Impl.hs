@@ -845,9 +845,9 @@ isSuspended tr@(ThreadReference _ ti) = do
 
 -- ThreadGroupReference functions section {{{
 
-{- | A thread group object from the target VM. A ThreadGroupReference is an
-ObjectReference with additional access to threadgroup-specific information from
-the target VM.
+{- | A thread group object from the target VM. A 'ThreadGroupReference' is an
+'J.ObjectReference' with additional access to threadgroup-specific information
+from the target VM.
 -}
 data ThreadGroupReference = ThreadGroupReference String J.JavaThreadGroupId
                             deriving (Eq, Show)
@@ -860,65 +860,6 @@ threadGroupReferenceFromId refId = do
     let r = J.dat reply
     let name = runGet J.parseString (J.toLazy r)
     return $ ThreadGroupReference name refId
-
-threadGroupRefName :: ThreadGroupReference -> String
-threadGroupRefName (ThreadGroupReference n _) = n
-
-{- | Returns the parent of this thread group.
-
-Returns: a ThreadGroupReference mirroring the parent of this thread group
-in the target VM, or null if this is a top-level thread group.
--}
-parent :: (Error e, MonadIO m, MonadError e m)
-       => ThreadGroupReference -> VirtualMachine m ThreadGroupReference
-parent (ThreadGroupReference _ refId) = do
-    reply <- runCommand $ J.threadGroupReferenceParentCommand refId
-    let r = J.dat reply
-    idsizes <- getIdSizes
-    let parentId = runGet
-                    (J.parseThreadGroupId $ J.threadGroupIdSize idsizes)
-                    (J.toLazy r)
-    threadGroupReferenceFromId parentId
-
-{- | Returns a List containing each active ThreadGroupReference in this thread
-group. Only the active thread groups in this immediate thread group (and not its
-subgroups) are returned. See java.lang.ThreadGroup for information about
-'active' ThreadGroups.
-
-Returns: a list of ThreadGroupReference objects mirroring the active thread
-groups from this thread group in the target VM.
--}
-threadGroups :: (Error e, MonadIO m, MonadError e m)
-             => ThreadGroupReference
-             -> VirtualMachine m [ThreadGroupReference]
-threadGroups (ThreadGroupReference _ refId) = do
-    reply <- runCommand $ J.threadGroupReferenceChildrenCommand refId
-    let r = J.dat reply
-    idsizes <- getIdSizes
-    let (_, groups) = runGet
-                        (J.parseThreadGroupChildrenReply idsizes)
-                        (J.toLazy r)
-    mapM threadGroupReferenceFromId groups
-
-{- | Returns a list containing a ThreadReference for each live thread in this
-thread group. Only the live threads in this immediate thread group (and not its
-subgroups) are returned. A thread is alive if it has been started and has not
-yet been stopped.
-
-Returns: a list of ThreadReference objects mirroring the live threads from this
-thread group in the target VM.
--}
-threads :: (Error e, MonadIO m, MonadError e m)
-             => ThreadGroupReference
-             -> VirtualMachine m [ThreadReference]
-threads (ThreadGroupReference _ refId) = do
-    reply <- runCommand $ J.threadGroupReferenceChildrenCommand refId
-    let r = J.dat reply
-    idsizes <- getIdSizes
-    let (ts, _) = runGet
-                        (J.parseThreadGroupChildrenReply idsizes)
-                        (J.toLazy r)
-    mapM threadReferenceFromId ts
 
 -- }}}
 
