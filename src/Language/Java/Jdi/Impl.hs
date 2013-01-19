@@ -984,24 +984,6 @@ entryCount (J.ObjectReference refId) = do
     let (_, count, _) = runGet (J.parseMonitorInfoReply idsizes) (J.toLazy r)
     return $ fromIntegral count
 
-objGetValue :: (Error e, MonadIO m, MonadError e m)
-            => J.ObjectReference -> Field -> VirtualMachine m Value
-objGetValue (J.ObjectReference ri) (Field _ f) = do
-    reply <- runCommand $ J.objGetValuesCommand ri [f]
-    idsizes <- getIdSizes
-    return $ toJdiValue $ head $ runGet
-                        (J.parseGetValuesReply idsizes)
-                        (J.toLazy $ J.dat reply)
-
-objGetValues :: (Error e, MonadIO m, MonadError e m)
-             => J.ObjectReference -> [Field] -> VirtualMachine m [Value]
-objGetValues (J.ObjectReference ri) fs = do
-    reply <- runCommand $ J.objGetValuesCommand ri (map getFid fs)
-    idsizes <- getIdSizes
-    return $ map toJdiValue $ runGet (J.parseGetValuesReply idsizes)
-                             (J.toLazy $ J.dat reply)
-    where getFid (Field _ f) = f
-
 invokeMethod :: J.ObjectReference
              -> ThreadReference
              -> Method
