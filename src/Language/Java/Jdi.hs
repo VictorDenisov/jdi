@@ -1,6 +1,5 @@
 module Language.Java.Jdi
-( Locatable(..)
-, J.StepSize(..)
+( J.StepSize(..)
 , J.StepDepth(..)
 , J.ThreadStatus(..)
 , J.SuspendStatus(..)

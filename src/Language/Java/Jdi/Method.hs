@@ -15,6 +15,7 @@ module Language.Java.Jdi.Method
 , isFinal
 , isStatic
 , isSynthetic
+, location
 ) where
 
 import Language.Java.Jdi.Impl
@@ -50,3 +51,9 @@ isStatic (Method _ (J.Method _ _ _ modbits))
                         = (J.method_static .&. modbits) /= 0
 isSynthetic (Method _ (J.Method _ _ _ modbits))
                         = (J.method_synthetic .&. modbits) /= 0
+
+location :: (Error e, MonadIO m, MonadError e m)
+         => Method -> VirtualMachine m Location
+location m@(Method ref method) = do
+    (J.LineTable _ _ lines) <- receiveLineTable m
+    return $ Location ref method (head lines)

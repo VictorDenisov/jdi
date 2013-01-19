@@ -2,6 +2,7 @@ module Language.Java.Jdi.StackFrame
 ( StackFrame
 , getValue
 , thisObject
+, location
 ) where
 
 import Language.Java.Jdi.Impl
@@ -39,3 +40,8 @@ thisObject sf@(StackFrame (ThreadReference _ ti) (J.StackFrame fi _)) = do
                         (J.parseTaggedValue idsizes)
                         (J.toLazy $ J.dat reply)
     return ref
+
+location :: (Error e, MonadIO m, MonadError e m)
+         => StackFrame -> VirtualMachine m Location
+location (StackFrame _ (J.StackFrame _ javaLoc))
+                    = locationFromJavaLocation javaLoc

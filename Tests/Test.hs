@@ -122,8 +122,8 @@ body = do
     liftIO . putStrLn $ "Printing line table"
     lineTable <- M.allLineLocations methodMain
     liftIO . putStrLn $ "After line table"
-    mainLocation <- location methodMain
-    runLocation <- location runMethod
+    mainLocation <- M.location methodMain
+    runLocation <- M.location runMethod
     liftIO . putStrLn $ intercalate "\n" (map show lineTable)
     classLineLocations <- RT.allLineLocations mainClass
     liftIO . putStrLn $ intercalate "\n" (map show classLineLocations)
@@ -136,7 +136,7 @@ body = do
     printThreadTree
     liftIO . putStrLn $ "breakpoint stopped at location"
     liftIO . putStrLn $ show methodMain
-    loc <- location ev
+    loc <- E.location ev
     liftIO . putStrLn $ show loc
     liftIO . putStrLn $ "Values of args"
 
@@ -262,7 +262,7 @@ getValueOfI curThread = do
     liftIO $ putStrLn $ "Frame count: " ++ (show frCnt)
     fr <- head <$> TR.allFrames curThread
     liftIO $ putStrLn $ show fr
-    loc <- location fr
+    loc <- SF.location fr
     liftIO $ putStrLn $ show loc
     var <- head <$> M.variablesByName (L.method loc) "i"
     liftIO $ putStrLn $ show var

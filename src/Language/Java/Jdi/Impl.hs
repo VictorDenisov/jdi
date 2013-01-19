@@ -181,11 +181,6 @@ initialVmState :: Handle -> VmState
 initialVmState h = VmState Nothing 0 h S.empty Nothing Nothing
 -- }}}
 
--- Classes definitions. {{{
-class Locatable a where
-    location :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m Location
--- }}}
-
 --- Functions from official interface {{{
 
 -- VirtualMachine functions section {{{
@@ -370,11 +365,6 @@ topLevelThreadGroups = do
 -- }}}
 
 -- Event functions section {{{
-instance Locatable J.Event where
-    location (J.BreakpointEvent _ _ javaLocation) =
-        locationFromJavaLocation javaLocation
-    location (J.StepEvent _ _ javaLocation) =
-        locationFromJavaLocation javaLocation
 
 referenceType :: J.Event -> J.ReferenceType
 referenceType (J.ClassPrepareEvent
@@ -747,10 +737,6 @@ stackFrameGetValue (StackFrame (ThreadReference _ ti) (J.StackFrame fi _))
                         (J.parseGetValuesReply idsizes)
                         (J.toLazy $ J.dat reply)
 
-instance Locatable StackFrame where
-    location (StackFrame _ (J.StackFrame _ javaLoc))
-                        = locationFromJavaLocation javaLoc
-
 -- }}}
 
 -- ThreadReference functions section {{{
@@ -1072,11 +1058,6 @@ methodAllLineLocations :: (Error e, MonadIO m, MonadError e m)
 methodAllLineLocations m@(Method ref method) = do
         (J.LineTable _ _ lines) <- receiveLineTable m
         return $ map (Location ref method) lines
-
-instance Locatable Method where
-    location m@(Method ref method) = do
-        (J.LineTable _ _ lines) <- receiveLineTable m
-        return $ Location ref method (head lines)
 
 {- | Returns a list containing each LocalVariable that is declared as an
 argument of this method. If local variable information is not available, values
