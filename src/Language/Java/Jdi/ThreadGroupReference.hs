@@ -6,7 +6,7 @@ module Language.Java.Jdi.ThreadGroupReference
 , name
 ) where
 
-import Language.Java.Jdi.Impl hiding (name)
+import Language.Java.Jdi.Impl
 
 name :: ThreadGroupReference -> String
 name = threadGroupRefName

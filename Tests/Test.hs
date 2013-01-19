@@ -14,6 +14,7 @@ import qualified Language.Java.Jdi.ThreadReference as TR
 import qualified Language.Java.Jdi.ThreadGroupReference as TG
 import qualified Language.Java.Jdi.ObjectReference as OR
 import qualified Language.Java.Jdi.Method as M
+import qualified Language.Java.Jdi.Field as F
 import qualified Language.Java.Jdi.Location as L
 
 import Network.Socket.Internal (PortNumber(..))
@@ -66,9 +67,9 @@ body = do
 
     checkFieldsNames fields
     liftIO . putStrLn $ "Main class fields: " ++ show fields
-    liftIO . putStrLn $ "Main class fields static: " ++ (show $ map isStatic fields)
-    liftIO . putStrLn $ "Main class fields public: " ++ (show $ map isPublic fields)
-    liftIO . putStrLn $ "Main class fields private: " ++ (show $ map isPrivate fields)
+    liftIO . putStrLn $ "Main class fields static: " ++ (show $ map F.isStatic fields)
+    liftIO . putStrLn $ "Main class fields public: " ++ (show $ map F.isPublic fields)
+    liftIO . putStrLn $ "Main class fields private: " ++ (show $ map F.isPrivate fields)
     sName <- RT.sourceName mainClass
     liftIO . putStrLn $ "Main class source name: " ++ sName
     mainClassInterfaces <- RT.interfaces mainClass
@@ -85,13 +86,13 @@ body = do
     liftIO . putStrLn $ "Methods for class " ++ (show mainClass)
     liftIO . putStrLn $ intercalate "\n" (map show methods)
     liftIO . putStrLn =<< Vm.name
-    liftIO . putStrLn $ name $ head methods
+    liftIO . putStrLn $ M.name $ head methods
     forM_ threads (\thread -> liftIO . putStrLn $ TR.name thread)
-    let isMainMethod = ("main" ==) . name
-    let isRunMethod = ("run" ==) . name
+    let isMainMethod = ("main" ==) . M.name
+    let isRunMethod = ("run" ==) . M.name
     let methodMain = head $ filter isMainMethod methods
     let runMethod = head $ filter isRunMethod methods
-    let isAnotherMethod = ("anotherMethod" ==) . name
+    let isAnotherMethod = ("anotherMethod" ==) . M.name
     let anotherMethod = head $ filter isAnotherMethod methods
     liftIO . putStrLn $ "Variables of method anotherMethod: " ++ (show anotherMethod)
     do
@@ -237,9 +238,9 @@ printThreadGroup depth tg = do
 
 checkFieldsNames fields = do
     when (length fields /= 3) $ liftIO exitFailure
-    let f1name = name (fields !! 0)
-    let f2name = name (fields !! 1)
-    let f3name = name (fields !! 2)
+    let f1name = F.name (fields !! 0)
+    let f2name = F.name (fields !! 1)
+    let f3name = F.name (fields !! 2)
     when (f1name /= "f1") $ liftIO exitFailure
     when (f2name /= "fprivate") $ liftIO exitFailure
     when (f3name /= "args") $ liftIO exitFailure

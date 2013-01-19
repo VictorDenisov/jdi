@@ -1,9 +1,10 @@
 module Language.Java.Jdi.Event
-( Event
+( J.Event
 , thread
-, EventKind(..)
-, eventKind
+, J.EventKind(..)
+, J.eventKind
 , referenceType
 ) where
 
 import Language.Java.Jdi.Impl
+import qualified Language.Java.Jdwp as J

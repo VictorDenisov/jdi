@@ -3,7 +3,7 @@ module Language.Java.Jdi.LocalVariable
 , name
 ) where
 
-import Language.Java.Jdi.Impl hiding (name)
+import Language.Java.Jdi.Impl
 
 name :: LocalVariable -> String
 name = localVariableName

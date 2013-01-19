@@ -10,7 +10,7 @@ module Language.Java.Jdi.ThreadReference
 , resume
 ) where
 
-import Language.Java.Jdi.Impl hiding (name)
+import Language.Java.Jdi.Impl
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Error (ErrorT, runErrorT, MonadError(..), Error(..))
 

@@ -1,110 +1,4 @@
-module Language.Java.Jdi.Impl
-( VirtualMachine
-, runVirtualMachine
-, Locatable(..)
-, Accessible(..)
-, TypeComponent(..)
-, vmName
-, description
-, version
-, allClasses
-, allThreads
-, canAddMethod
-, canBeModified
-, canGetBytecodes
-, canGetCurrentContendedMonitor
-, canGetMonitorInfo
-, canGetOwnedMonitorInfo
-, canGetSourceDebugExtension
-, canGetSynteticAttribute
-, canPopFrames
-, canRedefineClasses
-, canRequestVmDeathEvent
-, canUnrestrictedlyRedefineClasses
-, canUseInstanceFilters
-, canWatchFieldAccess
-, canWatchFieldModification
-, classesByName
-, dispose
-, exit
-, resumeVm
-, suspendVm
-, topLevelThreadGroups
-, J.Event
-, thread
-, referenceType
-, J.EventKind(..)
-, J.eventKind
-, J.EventSet(..)
-, removeEvent
-, resumeEventSet
-, EventRequest
-, enable
-, disable
-, addCountFilter
-, createClassPrepareRequest
-, createBreakpointRequest
-, createStepRequest
-, J.ReferenceType
-, refTypeName
-, refTypeGetValue
-, refTypeSignature
-, refTypeAllLineLocations
-, refTypeSourceName
-, fields
-, methods
-, interfaces
-, superclass
-, J.ArrayReference
-, getArrValue
-, getArrValues
-, arrLength
-, J.StringReference
-, stringValue
-, Value(..)
-, StackFrame
-, stackFrameGetValue
-, thisObject
-, ThreadReference
-, threadRefName
-, allFrames
-, frameCount
-, frames
-, threadGroup
-, status
-, isSuspended
-, resumeThreadRef
-, ThreadGroupReference
-, threadGroupRefName
-, parent
-, threadGroups
-, threads
-, J.ObjectReference
-, disableCollection
-, enableCollection
-, entryCount
-, objGetValue
-, objGetValues
-, J.StepSize(..)
-, J.StepDepth(..)
-, J.ThreadStatus(..)
-, J.SuspendStatus(..)
-, Field
-, Method
-, arguments
-, variables
-, variablesByName
-, methodAllLineLocations
-, LocalVariable
-, localVariableName
-, Location
-, codeIndex
-, locationDeclaringType
-, locationSourceName
-, lineNumber
-, method
-, J.SuspendPolicy(..)
-) where
+module Language.Java.Jdi.Impl where
 
 -- Imports {{{
 import Control.Monad.State (StateT(..), MonadState(..), evalStateT)
@@ -290,23 +184,6 @@ initialVmState h = VmState Nothing 0 h S.empty Nothing Nothing
 -- Classes definitions. {{{
 class Locatable a where
     location :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m Location
-
--- | Returns the reference type for which this event was generated.
-class Accessible a where
-    isPackagePrivate :: a -> Bool
-    isPrivate :: a -> Bool
-    isProtected :: a -> Bool
-    isPublic :: a -> Bool
-    modifiers :: a -> Int
-
-class Accessible a => TypeComponent a where
-    name :: a -> String
-    declaringType :: a -> J.ReferenceType
-    signature :: a -> String
-    isFinal :: a -> Bool
-    isStatic :: a -> Bool
-    isSynthetic :: a -> Bool
-
 -- }}}
 
 --- Functions from official interface {{{
@@ -691,24 +568,6 @@ createStepRequest tr ss sd = EventRequest J.SuspendAll Nothing [] (StepRequest t
 refTypeSignature :: J.ReferenceType -> String
 refTypeSignature (J.ReferenceType _ _ gs _) = gs
 
-{- | Gets the Value of a given static Field in this type. The Field must be
-valid for this type; that is, it must be declared in this type, a superclass,
-a superinterface, or an implemented interface.
-
-Program should be started to be sure static fields are properly
-initialized.
- -}
-refTypeGetValue :: (Error e, MonadIO m, MonadError e m) =>
-                   J.ReferenceType -> Field -> VirtualMachine m Value
-refTypeGetValue (J.ReferenceType _ ri _ _) field@(Field _ f) = do
-    when (not $ isStatic field)
-                $ throwError $ strMsg "Only static fields are allowed in ReferenceType getValue"
-    reply <- runCommand $ J.refGetValuesCommand ri [f]
-    idsizes <- getIdSizes
-    return $ toJdiValue $ head $ runGet
-                        (J.parseGetValuesReply idsizes)
-                        (J.toLazy $ J.dat reply)
-
 {- | Returns a list containing each Field declared in this type. Inherited
 fields are not included. Any synthetic fields created by the compiler are
 included in the list.
@@ -891,26 +750,6 @@ stackFrameGetValue (StackFrame (ThreadReference _ ti) (J.StackFrame fi _))
 instance Locatable StackFrame where
     location (StackFrame _ (J.StackFrame _ javaLoc))
                         = locationFromJavaLocation javaLoc
-
-{- | Returns the value of 'this' for the current frame. The ObjectReference for
-'this' is only available for non-native instance methods.
-
-Returns: an ObjectReference, or null ObjectReference if the frame represents a
-native or static method.
--}
-thisObject :: (Error e, MonadIO m, MonadError e m)
-           => StackFrame -> VirtualMachine m J.ObjectReference
-thisObject sf@(StackFrame (ThreadReference _ ti) (J.StackFrame fi _)) = do
-    loc <- location sf
-    let mtd = method loc
-    when (isStatic mtd) $
-                throwError $ strMsg "Can get this object for static method"
-    reply <- runCommand $ J.thisObjectCommand ti fi
-    idsizes <- getIdSizes
-    let (ObjectValue ref) = toJdiValue $ runGet
-                        (J.parseTaggedValue idsizes)
-                        (J.toLazy $ J.dat reply)
-    return ref
 
 -- }}}
 
@@ -1219,32 +1058,6 @@ for general information about Field and Method mirrors.
 data Field = Field J.ReferenceType J.Field
               deriving (Eq, Show)
 
-instance Accessible Field where
-    isPackagePrivate f = not (isPrivate f)
-                      && not (isProtected f)
-                      && not (isPublic f)
-    isPrivate (Field _ (J.Field _ _ _ modbits))
-                                = (modbits .&. J.field_private) /= 0
-    isProtected (Field _ (J.Field _ _ _ modbits))
-                                = (modbits .&. J.field_protected) /= 0
-    isPublic (Field _ (J.Field _ _ _ modbits))
-                                = (modbits .&. J.field_public) /= 0
-    modifiers (Field _ (J.Field _ _ _ modbits)) = fromIntegral modbits
-
-instance TypeComponent Field where
-    name (Field _ (J.Field _ nm _ _)) = nm
-
-    declaringType (Field rt _) = rt
-
-    signature (Field _ (J.Field _ _ sig _)) = sig
-
-    isFinal (Field _ (J.Field _ _ _ modbits))
-                            = (J.field_final .&. modbits) /= 0
-    isStatic (Field _ (J.Field _ _ _ modbits))
-                            = (J.field_static .&. modbits) /= 0
-    isSynthetic (Field _ (J.Field _ _ _ modbits))
-                            = (J.field_synthetic .&. modbits) /= 0
-
 -- }}}
 
 -- Method functions section {{{
@@ -1304,32 +1117,6 @@ variablesByName :: (Error e, MonadIO m, MonadError e m) =>
 variablesByName method varName =
     (filter ((varName ==) . localVariableName)) `liftM` (variables method)
 
-instance Accessible Method where
-    isPackagePrivate f = not (isPrivate f)
-                      && not (isProtected f)
-                      && not (isPublic f)
-    isPrivate (Method _ (J.Method _ _ _ modbits))
-                                = (modbits .&. J.method_private) /= 0
-    isProtected (Method _ (J.Method _ _ _ modbits))
-                                = (modbits .&. J.method_protected) /= 0
-    isPublic (Method _ (J.Method _ _ _ modbits))
-                                = (modbits .&. J.method_public) /= 0
-    modifiers (Method _ (J.Method _ _ _ modbits)) = fromIntegral modbits
-
-instance TypeComponent Method where
-
-    name (Method _ (J.Method _ name _ _)) = name
-
-    declaringType (Method rt _) = rt
-
-    signature (Method _ (J.Method _ _ sig _)) = sig
-
-    isFinal (Method _ (J.Method _ _ _ modbits))
-                            = (J.method_final .&. modbits) /= 0
-    isStatic (Method _ (J.Method _ _ _ modbits))
-                            = (J.method_static .&. modbits) /= 0
-    isSynthetic (Method _ (J.Method _ _ _ modbits))
-                            = (J.method_synthetic .&. modbits) /= 0
 -- }}}
 
 -- LocalVariable functions section {{{

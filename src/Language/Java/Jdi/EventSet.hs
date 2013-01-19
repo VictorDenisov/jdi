@@ -1,5 +1,5 @@
 module Language.Java.Jdi.EventSet
-( EventSet(..)
+( J.EventSet(..)
 , removeEvent
 , resume
 ) where
@@ -7,7 +7,8 @@ module Language.Java.Jdi.EventSet
 import Language.Java.Jdi.Impl
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Error (ErrorT, runErrorT, MonadError(..), Error(..))
+import qualified Language.Java.Jdwp as J
 
 resume :: (Error e, MonadIO m, MonadError e m)
-       => EventSet -> VirtualMachine m ()
+       => J.EventSet -> VirtualMachine m ()
 resume = resumeEventSet
