@@ -704,29 +704,20 @@ toJdiValue (J.ObjectValue objectId) = ObjectValue $ J.ObjectReference objectId
 
 {- | The state of one method invocation on a thread's call stack. As a thread
 executes, stack frames are pushed and popped from its call stack as methods are
-invoked and then return. A StackFrame mirrors one such frame from a target VM at
+invoked and then return. A 'StackFrame' mirrors one such frame from a target VM at
 some point in its thread's execution. The call stack is, then, simply a list of
-StackFrame objects. The call stack can be obtained any time a thread is
-suspended through a call to allFrames function of ThreadReference.
+'StackFrame' objects. The call stack can be obtained any time a thread is
+suspended through a call to 'Language.Java.Jdi.ThreadReference.allFrames'
+function of 'ThreadReference'.
 
-StackFrames provide access to a method's local variables and their current
+'StackFrame's provide access to a method's local variables and their current
 values.
 
-The lifetime of a StackFrame is very limited. It is available only for suspended
-threads and becomes invalid once its thread is resumed.
+The lifetime of a 'StackFrame' is very limited. It is available only for
+suspended threads and becomes invalid once its thread is resumed.
 -}
 data StackFrame = StackFrame ThreadReference J.StackFrame
                   deriving (Eq, Show)
-
-stackFrameGetValue :: (Error e, MonadIO m, MonadError e m) =>
-            StackFrame -> LocalVariable -> VirtualMachine m Value
-stackFrameGetValue (StackFrame (ThreadReference _ ti) (J.StackFrame fi _))
-         (LocalVariable _ _ slot) = do
-    reply <- runCommand $ J.getValuesCommand ti fi [slot]
-    idsizes <- getIdSizes
-    return $ toJdiValue $ head $ runGet
-                        (J.parseGetValuesReply idsizes)
-                        (J.toLazy $ J.dat reply)
 
 -- }}}
 
