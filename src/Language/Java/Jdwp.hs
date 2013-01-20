@@ -441,20 +441,21 @@ data SuspendStatus = Resumed
                    | Suspended
                      deriving (Eq, Show)
 
-{- | The type of an object in a target VM. ReferenceType encompasses classes,
+{- | The type of an object in a target VM. 'ReferenceType' encompasses classes,
 interfaces, and array types as defined in The Java Language Specification.
-All ReferenceType objects belong to one of the following subinterfaces:
-ClassType for classes, InterfaceType for interfaces, and ArrayType for arrays.
-Note that primitive classes (for example, the reflected type of Integer.TYPE)
-are represented as ClassType. The VM creates Class objects for all three, so
-from the VM perspective, each ReferenceType maps to a distinct Class object.
+All 'ReferenceType' objects belong to one of the following subinterfaces:
+'ClassType' for classes, 'InterfaceType' for interfaces, and 'ArrayType' for
+arrays.  Note that primitive classes (for example, the reflected type of
+Integer.TYPE) are represented as 'ClassType'. The VM creates Class objects for
+all three, so from the VM perspective, each 'ReferenceType' maps to a distinct
+Class object.
 
-ReferenceTypes can be obtained by querying a particular ObjectReference for its
-type or by getting a list of all reference types from the VirtualMachine.
+'ReferenceType's can be obtained by querying a particular 'ObjectReference' for
+its type or by getting a list of all reference types from the 'VirtualMachine'.
 
-ReferenceType provides access to static type information such as methods and
-fields and provides access to dynamic type information such as the corresponding
-Class object and the classloader.
+'ReferenceType' provides access to static type information such as methods and
+fields and provides access to dynamic type information such as the
+corresponding Class object and the classloader.
 -}
 data ReferenceType = ReferenceType
                             TypeTag

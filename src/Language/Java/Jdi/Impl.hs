@@ -555,74 +555,21 @@ createStepRequest tr ss sd = EventRequest J.SuspendAll Nothing [] (StepRequest t
 
 -- ReferenceType functions section {{{
 
-refTypeSignature :: J.ReferenceType -> String
-refTypeSignature (J.ReferenceType _ _ gs _) = gs
-
-{- | Returns a list containing each Field declared in this type. Inherited
-fields are not included. Any synthetic fields created by the compiler are
-included in the list.
-
-For arrays (ArrayType) and primitive classes, the returned list is always empty.
--}
-fields :: (Error e, MonadIO m, MonadError e m) =>
-             J.ReferenceType -> VirtualMachine m [Field]
-fields rt@(J.ReferenceType _ refId _ _) = do
-    idsizes <- getIdSizes
-    reply <- runCommand $ J.fieldsCommand refId
-    let r = J.dat reply
-    let fields = runGet (J.parseFieldsReply idsizes) (J.toLazy r)
-    return $ map (Field rt) fields
-
-{- | Returns a list containing each Method declared directly in this type.
+{- | Returns a list containing each 'Method' declared directly in this type.
 Inherited methods are not included. Constructors, the initialization method if
 any, and any synthetic methods created by the compiler are included in the list.
 
-For arrays (ArrayType) and primitive classes, the returned list is always empty.
+For arrays ('ArrayType') and primitive classes, the returned list is always
+empty.
 -}
 methods :: (Error e, MonadIO m, MonadError e m) =>
-              J.ReferenceType -> VirtualMachine m [Method]
+           J.ReferenceType -> VirtualMachine m [Method]
 methods rt@(J.ReferenceType _ refId _ _) = do
     idsizes <- getIdSizes
     reply <- runCommand $ J.methodsCommand refId
     let r = J.dat reply
     let methods = runGet (J.parseMethodsReply idsizes) (J.toLazy r)
     return $ map (Method rt) methods
-
-refTypeName :: J.ReferenceType -> String
-refTypeName = signatureToName . refTypeSignature
-
-refTypeSourceName :: (Error e, MonadIO m, MonadError e m)
-                  => J.ReferenceType -> VirtualMachine m String
-refTypeSourceName (J.ReferenceType _ refId _ _) = do
-    reply <- runCommand $ J.sourceFileCommand refId
-    let r = J.dat reply
-    let sourceName = runGet J.parseString (J.toLazy r)
-    return sourceName
-
-refTypeAllLineLocations :: (Error e, MonadIO m, MonadError e m)
-                        => J.ReferenceType -> VirtualMachine m [Location]
-refTypeAllLineLocations refType =
-    concat `liftM` ((mapM methodAllLineLocations) =<< (methods refType))
-
--- For interfaces returns interfaces extended by this interface.
-interfaces :: (Error e, MonadIO m, MonadError e m) =>
-              J.ReferenceType -> VirtualMachine m [J.ReferenceType]
-interfaces (J.ReferenceType _ refId _ _) = do
-    reply <- runCommand $ J.interfacesCommand refId
-    let r = J.dat reply
-    idsizes <- getIdSizes
-    let interfaceIds = runGet (J.parseInterfacesReply idsizes) (J.toLazy r)
-    mapM (referenceTypeFromRefId J.Interface) interfaceIds
-
--- | Doesn't work for ReferenceTypes that are interfaces.
-superclass (J.ReferenceType _ refId _ _) = do
-    reply <- runCommand $ J.superclassCommand refId
-    let r = J.dat reply
-    idsizes <- getIdSizes
-    let subRefId = runGet
-                (J.parseReferenceTypeId $ J.referenceTypeIdSize idsizes)
-                (J.toLazy r)
-    referenceTypeFromRefId J.Class subRefId
 
 -- }}}
 
@@ -1045,7 +992,7 @@ method (Location refType method _) = Method refType method
 
 locationSourceName :: (Error e, MonadIO m, MonadError e m)
                    => Location -> VirtualMachine m String
-locationSourceName (Location ref _ _) = refTypeSourceName ref
+locationSourceName (Location (J.ReferenceType _ refId _ _) _ _) = sourceNameFromRefId refId
 
 -- }}}
 
@@ -1136,6 +1083,13 @@ getVariables (Method
     where
         slot (J.Slot _ _ _ _ s) = s
 
+sourceNameFromRefId :: (Error e , MonadIO m, MonadError e m)
+                    => J.JavaReferenceTypeId -> VirtualMachine m String
+sourceNameFromRefId refId = do
+    reply <- runCommand $ J.sourceFileCommand refId
+    let r = J.dat reply
+    let sourceName = runGet J.parseString (J.toLazy r)
+    return sourceName
 -- }}}
 
 -- vim: foldmethod=marker foldmarker={{{,}}}
