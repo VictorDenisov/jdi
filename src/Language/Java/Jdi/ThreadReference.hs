@@ -3,6 +3,7 @@ module Language.Java.Jdi.ThreadReference
 , allFrames
 , frameCount
 , frames
+, frame
 , threadGroup
 , status
 , isSuspended

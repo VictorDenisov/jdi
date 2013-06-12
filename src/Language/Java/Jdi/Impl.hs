@@ -71,6 +71,7 @@ module Language.Java.Jdi.Impl
 , allFrames
 , frameCount
 , frames
+, frame
 , threadGroup
 , status
 , isSuspended
@@ -894,6 +895,11 @@ frames tr start len = do
     when (start < 0) $ throwError $ strMsg "negative start"
     when (len < 0) $ throwError $ strMsg "negative len"
     getFrames tr start len
+
+frame :: (Error e, MonadIO m, MonadError e m) =>
+         ThreadReference -> Int -> VirtualMachine m StackFrame
+frame tr index = do
+    head `liftM` getFrames tr index 1
 
 -- This is unsafe implementation of frames command.
 getFrames :: (Error e, MonadIO m, MonadError e m)

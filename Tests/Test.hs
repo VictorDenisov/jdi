@@ -261,6 +261,9 @@ getValueOfI curThread = do
     liftIO $ putStrLn $ "Frame count: " ++ (show frCnt)
     fr <- head <$> TR.allFrames curThread
     liftIO $ putStrLn $ show fr
+    liftIO $ putStrLn "Individual frames"
+    indFrames <- sequence [TR.frame curThread x | x <- [0..(frCnt - 1)]]
+    liftIO $ putStrLn $ show indFrames
     loc <- location fr
     liftIO $ putStrLn $ show loc
     var <- head <$> M.variablesByName (L.method loc) "i"
