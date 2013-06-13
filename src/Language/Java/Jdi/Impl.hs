@@ -253,7 +253,6 @@ preflight = do
 askIdSizes :: MonadIO m => VirtualMachine m ()
 askIdSizes = do
     h <- getVmHandle
-    liftIO $ putStrLn $ show h
     cntr <- yieldPacketIdCounter
     liftIO $ J.sendPacket h $ J.idSizesCommand cntr
     r <- J.dat `liftM` (liftIO $ J.waitReply h)
