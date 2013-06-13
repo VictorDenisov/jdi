@@ -1,106 +1,4 @@
-module Language.Java.Jdi.Impl
-( VirtualMachine
-, runVirtualMachine
-, Name(..)
-, Resumable(..)
-, Locatable(..)
-, SourceName(..)
-, AllLineLocations(..)
-, RefType(..)
-, DeclaringType(..)
-, GenericSignature(..)
-, Signature(..)
-, Accessible(..)
-, TypeComponent(..)
-, vmName
-, description
-, version
-, allClasses
-, allThreads
-, canAddMethod
-, canBeModified
-, canGetBytecodes
-, canGetCurrentContendedMonitor
-, canGetMonitorInfo
-, canGetOwnedMonitorInfo
-, canGetSourceDebugExtension
-, canGetSynteticAttribute
-, canPopFrames
-, canRedefineClasses
-, canRequestVmDeathEvent
-, canUnrestrictedlyRedefineClasses
-, canUseInstanceFilters
-, canWatchFieldAccess
-, canWatchFieldModification
-, classesByName
-, dispose
-, exit
-, resumeVm
-, suspendVm
-, topLevelThreadGroups
-, J.Event
-, thread
-, J.EventKind(..)
-, J.eventKind
-, J.EventSet(..)
-, removeEvent
-, EventRequest
-, enable
-, disable
-, addCountFilter
-, createClassPrepareRequest
-, createBreakpointRequest
-, createStepRequest
-, J.ReferenceType
-, refTypeGetValue
-, fields
-, methods
-, interfaces
-, superclass
-, J.ArrayReference
-, getArrValue
-, getArrValues
-, arrLength
-, J.StringReference
-, stringValue
-, Value(..)
-, StackFrame
-, stackFrameGetValue
-, thisObject
-, ThreadReference
-, allFrames
-, frameCount
-, frames
-, frame
-, threadGroup
-, status
-, isSuspended
-, ThreadGroupReference
-, parent
-, threadGroups
-, threads
-, J.ObjectReference
-, disableCollection
-, enableCollection
-, entryCount
-, objGetValue
-, objGetValues
-, J.StepSize(..)
-, J.StepDepth(..)
-, J.ThreadStatus(..)
-, J.SuspendStatus(..)
-, Field
-, Method
-, arguments
-, variables
-, variablesByName
-, LocalVariable
-, Location
-, codeIndex
-, lineNumber
-, method
-, J.SuspendPolicy(..)
-) where
+module Language.Java.Jdi.Impl where
 
 -- Imports {{{
 import Control.Monad.State (StateT(..), MonadState(..), evalStateT)
@@ -282,54 +180,6 @@ initialVmState :: Handle -> VmState
 initialVmState h = VmState Nothing 0 h S.empty Nothing Nothing
 -- }}}
 
--- Classes definitions. {{{
-
-class Name a where
-    name :: a -> String
-
-class Resumable a where
-    resume :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m ()
-
-class Locatable a where
-    location :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m Location
-
-class SourceName a where
-    sourceName :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m String
-
-class AllLineLocations a where
-    allLineLocations :: (Error e, MonadIO m, MonadError e m) => a -> VirtualMachine m [Location]
-
-class RefType a where
-    referenceType :: a -> J.ReferenceType
-
-class DeclaringType a where
-    declaringType :: a -> J.ReferenceType
-
-class GenericSignature a where
-    genericSignature :: a -> String
-
-class Signature a where
-    signature :: a -> String
-
-class Accessible a where
-    isPackagePrivate :: a -> Bool
-    isPrivate :: a -> Bool
-    isProtected :: a -> Bool
-    isPublic :: a -> Bool
-    modifiers :: a -> Int
-
-class ( Name a
-      , DeclaringType a
-      , GenericSignature a
-      , Accessible a
-      , Signature a)
-   => TypeComponent a where
-    isFinal :: a -> Bool
-    isStatic :: a -> Bool
-    isSynthetic :: a -> Bool
-
--- }}}
-
 --- Functions from official interface {{{
 
 -- VirtualMachine functions section {{{
@@ -495,17 +345,9 @@ exit exitCode = do
     liftIO $ J.waitReply h
     return ()
 
--- | Continues the execution of the application running in this virtual machine.
 resumeVm :: (Error e, MonadIO m, MonadError e m) => VirtualMachine m ()
 resumeVm = runCommand J.resumeVmCommand >> return ()
 
-{- | Suspends the execution of the application running in this virtual machine.
-All threads currently running will be suspended.
-
-Unlike Thread.suspend(), suspends of both the virtual machine and individual
-threads are counted. Before a thread will run again, it must be resumed (through
-resume() or ThreadReference.resume()) the same number of times it has been
-suspended. -}
 suspendVm :: (Error e, MonadIO m, MonadError e m) => VirtualMachine m ()
 suspendVm = runCommand J.suspendVmCommand >> return ()
 
@@ -522,26 +364,19 @@ topLevelThreadGroups = do
 -- }}}
 
 -- Event functions section {{{
-instance Locatable J.Event where
-    location (J.BreakpointEvent _ _ javaLocation) =
-        locationFromJavaLocation javaLocation
-    location (J.StepEvent _ _ javaLocation) =
-        locationFromJavaLocation javaLocation
 
--- | Returns the reference type for which this event was generated.
-
-instance RefType J.Event where
-    referenceType (J.ClassPrepareEvent
-                    _
-                    threadId
-                    typeTag
-                    typeId
-                    signature
-                    classStatus) = J.ReferenceType
-                                            typeTag
-                                            typeId
-                                            signature
-                                            classStatus
+referenceType :: J.Event -> J.ReferenceType
+referenceType (J.ClassPrepareEvent
+                _
+                threadId
+                typeTag
+                typeId
+                signature
+                classStatus) = J.ReferenceType
+                                        typeTag
+                                        typeId
+                                        signature
+                                        classStatus
 
 {- | Returns the thread in which this event has occurred.
 
@@ -574,14 +409,19 @@ thread (J.StepEvent
 -- }}}
 
 -- EventSet functions section {{{
-instance Resumable J.EventSet where
-    resume (J.EventSet J.SuspendAll _) = resumeVm
-    resume (J.EventSet J.SuspendEventThread events)
-                                       = resumeThreadId
-                                       $ J.threadId
-                                       $ head events
-    resume (J.EventSet J.SuspendNone _) = return ()
+resumeEventSet :: (Error e, MonadIO m, MonadError e m)
+               => J.EventSet -> VirtualMachine m ()
+resumeEventSet (J.EventSet J.SuspendAll _) = resumeVm
+resumeEventSet (J.EventSet J.SuspendEventThread events)
+                                   = resumeThreadId
+                                   $ J.threadId
+                                   $ head events
+resumeEventSet (J.EventSet J.SuspendNone _) = return ()
 
+{- | Waits forever for the next available event.
+
+Returns: the next EventSet.
+-}
 removeEvent :: MonadIO m => VirtualMachine m J.EventSet
 removeEvent = do
     h <- getVmHandle
@@ -596,6 +436,30 @@ removeEvent = do
 
 -- EventRequest functions section. {{{
 
+{- | Represents a request for notification of an event. Examples include
+BreakpointRequest and ExceptionRequest. When an event occurs for which an
+enabled request is present, an EventSet will be placed on the event queue.
+
+The number of events generated for an event request can be controlled through
+filters. Filters provide additional constraints that an event must satisfy
+before it is placed on the event queue. Multiple filters can be used by making
+multiple calls to filter addition functions such as
+addClassFilter :: EventRequest -> String -> EventRequest. Filters are
+added to an event one at a time only while the event is disabled.
+Multiple filters are applied with CUT-OFF AND, in the order it was added to
+the request. Only events that satisfy all filters are placed in the event queue.
+
+The set of available filters is dependent on the event request, some examples
+of filters are:
+
+    Thread filters allow control over the thread for which events are generated.
+    Class filters allow control over the class in which the event occurs.
+    Instance filters allow control over the instance in which the event occurs.
+    Count filters allow control over the number of times an event is reported.
+
+Filters can dramatically improve debugger performance by reducing the amount of
+event traffic sent from the target VM to the debugger VM.
+-}
 data EventRequest = EventRequest
                         J.SuspendPolicy
                         (Maybe J.JavaInt) -- Id of event request if it's enabled
@@ -605,8 +469,15 @@ data EventRequest = EventRequest
                   | BreakpointRequest Location
                   | StepRequest ThreadReference J.StepSize J.StepDepth
                     deriving (Show, Eq)
+{- | Enables the event request and returns descriptor of the enabled event
+request. The descriptor can be used to disable the event request.
 
-enable :: (Error e, MonadIO m, MonadError e m) => EventRequest -> VirtualMachine m EventRequest
+While this event request is disabled, the event request will be ignored and the
+target VM will not be stopped if any of its threads reaches the event request.
+Disabled event requests still exist, and are included in event request lists.
+-}
+enable :: (Error e, MonadIO m, MonadError e m)
+       => EventRequest -> VirtualMachine m EventRequest
 enable (EventRequest suspendPolicy Nothing modifiers ClassPrepareRequest) = do
     reply <- runCommand $ J.eventSetRequest J.ClassPrepare suspendPolicy modifiers
     let r = J.dat reply
@@ -632,11 +503,20 @@ enable (EventRequest suspendPolicy Nothing modifiers request@(StepRequest
     return $ EventRequest suspendPolicy (Just requestId) modifiers request
 enable request@(EventRequest suspendPolicy (Just _) _ _) = return request
 
+-- | Determines if this event request is currently enabled.
 isEnabled :: EventRequest -> Bool
 isEnabled (EventRequest _ (Just _) _ _) = True
 isEnabled (EventRequest _ Nothing _ _)  = False
 
-disable :: (Error e, MonadIO m, MonadError e m) => EventRequest -> VirtualMachine m EventRequest
+{- | Disables the event request and returns descriptor of the disabled event
+request. The descriptor can be used to enable the event request again.
+
+While this event request is disabled, the event request will be ignored and the
+target VM will not be stopped if any of its threads reaches the event request.
+Disabled event requests still exist, and are included in event request lists.
+-}
+disable :: (Error e, MonadIO m, MonadError e m)
+        => EventRequest -> VirtualMachine m EventRequest
 disable (EventRequest
                 suspendPolicy
                 (Just requestId)
@@ -645,16 +525,28 @@ disable (EventRequest
     runCommand (J.eventClearRequest J.ClassPrepare requestId) >>
     return (EventRequest suspendPolicy Nothing modifiers er)
 
+{- | Limit the requested event to be reported at most once after a given number
+of occurrences. The event is not reported the first count - 1 times this filter
+is reached. To request a one-off event, call this method with a count of 1.
+
+Once the count reaches 0, any subsequent filters in this request are applied.
+If none of those filters cause the event to be suppressed, the event is
+reported. Otherwise, the event is not reported. In either case subsequent events
+are never reported for this request.
+-}
 addCountFilter :: Int -> EventRequest -> EventRequest
 addCountFilter count (EventRequest sp ri ems er) =
             EventRequest sp ri ((J.Count (fromIntegral count)) : ems) er
 
+-- | Creates a new disabled ClassPrepareRequest.
 createClassPrepareRequest :: EventRequest
 createClassPrepareRequest = EventRequest J.SuspendAll Nothing [] ClassPrepareRequest
 
+-- | Creates a new disabled BreakpointRequest.
 createBreakpointRequest :: Location -> EventRequest
 createBreakpointRequest l = EventRequest J.SuspendAll Nothing [] (BreakpointRequest l)
 
+-- | Creates a new disabled StepRequest.
 createStepRequest :: ThreadReference -> J.StepSize -> J.StepDepth -> EventRequest
 createStepRequest tr ss sd = EventRequest J.SuspendAll Nothing [] (StepRequest tr ss sd)
 
@@ -662,83 +554,21 @@ createStepRequest tr ss sd = EventRequest J.SuspendAll Nothing [] (StepRequest t
 
 -- ReferenceType functions section {{{
 
-instance Signature J.ReferenceType where
-    signature (J.ReferenceType _ _ gs _) = gs
+{- | Returns a list containing each 'Method' declared directly in this type.
+Inherited methods are not included. Constructors, the initialization method if
+any, and any synthetic methods created by the compiler are included in the list.
 
-{- | Gets the Value of a given static Field in this type. The Field must be
-valid for this type; that is, it must be declared in this type, a superclass,
-a superinterface, or an implemented interface.
-
-Program should be started to be sure static fields are properly
-initialized.
- -}
-refTypeGetValue :: (Error e, MonadIO m, MonadError e m) =>
-                   J.ReferenceType -> Field -> VirtualMachine m Value
-refTypeGetValue (J.ReferenceType _ ri _ _) field@(Field _ f) = do
-    when (not $ isStatic field)
-                $ throwError $ strMsg "Only static fields are allowed in ReferenceType getValue"
-    reply <- runCommand $ J.refGetValuesCommand ri [f]
-    idsizes <- getIdSizes
-    return $ toJdiValue $ head $ runGet
-                        (J.parseGetValuesReply idsizes)
-                        (J.toLazy $ J.dat reply)
-
-{- | Returns a list containing each Field declared in this type. Inherited
-fields are not included. Any synthetic fields created by the compiler are
-included in the list.
-
-For arrays (ArrayType) and primitive classes, the returned list is always empty.
+For arrays ('ArrayType') and primitive classes, the returned list is always
+empty.
 -}
-fields :: (Error e, MonadIO m, MonadError e m) =>
-             J.ReferenceType -> VirtualMachine m [Field]
-fields rt@(J.ReferenceType _ refId _ _) = do
-    idsizes <- getIdSizes
-    reply <- runCommand $ J.fieldsCommand refId
-    let r = J.dat reply
-    let fields = runGet (J.parseFieldsReply idsizes) (J.toLazy r)
-    return $ map (Field rt) fields
-
 methods :: (Error e, MonadIO m, MonadError e m) =>
-              J.ReferenceType -> VirtualMachine m [Method]
+           J.ReferenceType -> VirtualMachine m [Method]
 methods rt@(J.ReferenceType _ refId _ _) = do
     idsizes <- getIdSizes
     reply <- runCommand $ J.methodsCommand refId
     let r = J.dat reply
     let methods = runGet (J.parseMethodsReply idsizes) (J.toLazy r)
     return $ map (Method rt) methods
-
-instance Name J.ReferenceType where
-    name = signatureToName . signature
-
-instance SourceName J.ReferenceType where
-    sourceName (J.ReferenceType _ refId _ _) = do
-        reply <- runCommand $ J.sourceFileCommand refId
-        let r = J.dat reply
-        let sourceName = runGet J.parseString (J.toLazy r)
-        return sourceName
-
-instance AllLineLocations J.ReferenceType where
-    allLineLocations refType = concat `liftM` ((mapM allLineLocations) =<< (methods refType))
-
--- For interfaces returns interfaces extended by this interface.
-interfaces :: (Error e, MonadIO m, MonadError e m) =>
-              J.ReferenceType -> VirtualMachine m [J.ReferenceType]
-interfaces (J.ReferenceType _ refId _ _) = do
-    reply <- runCommand $ J.interfacesCommand refId
-    let r = J.dat reply
-    idsizes <- getIdSizes
-    let interfaceIds = runGet (J.parseInterfacesReply idsizes) (J.toLazy r)
-    mapM (referenceTypeFromRefId J.Interface) interfaceIds
-
--- | Doesn't work for ReferenceTypes that are interfaces.
-superclass (J.ReferenceType _ refId _ _) = do
-    reply <- runCommand $ J.superclassCommand refId
-    let r = J.dat reply
-    idsizes <- getIdSizes
-    let subRefId = runGet
-                (J.parseReferenceTypeId $ J.referenceTypeIdSize idsizes)
-                (J.toLazy r)
-    referenceTypeFromRefId J.Class subRefId
 
 -- }}}
 
@@ -774,12 +604,6 @@ arrLength arrRef@(J.ArrayReference objId) = do
 -- }}}
 
 -- StringReference functions section {{{
-
-stringValue :: (Error e, MonadIO m, MonadError e m) =>
-                 J.StringReference -> VirtualMachine m String
-stringValue sr@(J.StringReference sid) = do
-    reply <- runCommand $ J.stringValueCommand sid
-    return $ runGet J.parseString (J.toLazy $ J.dat reply)
 
 -- }}}
 
@@ -824,43 +648,31 @@ toJdiValue (J.ObjectValue objectId) = ObjectValue $ J.ObjectReference objectId
 
 -- StackFrame functions section {{{
 
+{- | The state of one method invocation on a thread's call stack. As a thread
+executes, stack frames are pushed and popped from its call stack as methods are
+invoked and then return. A 'StackFrame' mirrors one such frame from a target VM at
+some point in its thread's execution. The call stack is, then, simply a list of
+'StackFrame' objects. The call stack can be obtained any time a thread is
+suspended through a call to 'Language.Java.Jdi.ThreadReference.allFrames'
+function of 'ThreadReference'.
+
+'StackFrame's provide access to a method's local variables and their current
+values.
+
+The lifetime of a 'StackFrame' is very limited. It is available only for
+suspended threads and becomes invalid once its thread is resumed.
+-}
 data StackFrame = StackFrame ThreadReference J.StackFrame
                   deriving (Eq, Show)
-
-stackFrameGetValue :: (Error e, MonadIO m, MonadError e m) =>
-            StackFrame -> LocalVariable -> VirtualMachine m Value
-stackFrameGetValue (StackFrame (ThreadReference _ ti) (J.StackFrame fi _))
-         (LocalVariable _ _ slot) = do
-    reply <- runCommand $ J.getValuesCommand ti fi [slot]
-    idsizes <- getIdSizes
-    return $ toJdiValue $ head $ runGet
-                        (J.parseGetValuesReply idsizes)
-                        (J.toLazy $ J.dat reply)
-
-instance Locatable StackFrame where
-    location (StackFrame _ (J.StackFrame _ javaLoc))
-                        = locationFromJavaLocation javaLoc
-
-thisObject :: (Error e, MonadIO m, MonadError e m)
-           => StackFrame -> VirtualMachine m J.ObjectReference
-thisObject sf@(StackFrame (ThreadReference _ ti) (J.StackFrame fi _)) = do
-    loc <- location sf
-    let mtd = method loc
-    when (isStatic mtd) $
-                throwError $ strMsg "Can get this object for static method"
-    reply <- runCommand $ J.thisObjectCommand ti fi
-    idsizes <- getIdSizes
-    let (ObjectValue ref) = toJdiValue $ runGet
-                        (J.parseTaggedValue idsizes)
-                        (J.toLazy $ J.dat reply)
-    return ref
 
 -- }}}
 
 -- ThreadReference functions section {{{
 
-                                    --  name     threadId
-data ThreadReference = ThreadReference String J.JavaThreadId
+{- | A thread object from the target VM. A ThreadReference is an ObjectReference
+with additional access to thread-specific information from the target VM.
+-}
+data ThreadReference = ThreadReference String J.JavaThreadId -- name threadId
                        deriving (Eq, Show)
 
 threadReferenceFromId :: (Error e, MonadIO m, MonadError e m)
@@ -871,16 +683,23 @@ threadReferenceFromId refId = do
     let name = runGet J.parseString (J.toLazy r)
     return $ ThreadReference name refId
 
-instance Name ThreadReference where
-    name (ThreadReference n _) = n
+{- | Returns a List containing each StackFrame in the thread's current call
+stack. The thread must be suspended (normally through an interruption to the VM)
+to get this information, and it is only valid until the thread is resumed again.
 
-instance Resumable ThreadReference where
-    resume (ThreadReference _ tId) = resumeThreadId tId
-
+Returns: a list of StackFrame with the current frame first followed by each
+caller's frame.
+-}
 allFrames :: (Error e, MonadIO m, MonadError e m)
           => ThreadReference -> VirtualMachine m [StackFrame]
 allFrames tr = getFrames tr 0 (-1)
 
+{- | Returns the number of stack frames in the thread's current call stack. The
+thread must be suspended (normally through an interruption to the VM) to get
+this information, and it is only valid until the thread is resumed again.
+
+Returns: an integer frame count
+-}
 frameCount :: (Error e, MonadIO m, MonadError e m)
            => ThreadReference -> VirtualMachine m Int
 frameCount tr@(ThreadReference _ tId) = do
@@ -888,8 +707,20 @@ frameCount tr@(ThreadReference _ tId) = do
     let count = runGet J.parseInt (J.toLazy $ J.dat reply)
     return $ fromIntegral count
 
+{- | Returns a List containing a range of StackFrame mirrors from the thread's
+current call stack. The thread must be suspended (normally through an
+interruption to the VM) to get this information, and it is only valid until the
+thread is resumed again.
+
+Returns:
+    a List of StackFrame with the current frame first followed by each caller's frame.
+-}
 frames :: (Error e, MonadIO m, MonadError e m) =>
-          ThreadReference -> Int -> Int -> VirtualMachine m [StackFrame]
+          ThreadReference
+          -> Int -- ^ start - the index of the first frame to retrieve.
+                 -- Index 0 represents the current frame.
+          -> Int -- ^ length - the number of frames to retrieve
+          -> VirtualMachine m [StackFrame]
 frames tr start len = do
     when (start < 0) $ throwError $ strMsg "negative start"
     when (len < 0) $ throwError $ strMsg "negative len"
@@ -909,6 +740,7 @@ getFrames tr@(ThreadReference _ ti) start len = do
     let r = J.dat reply
     return $ map (StackFrame tr) $ runGet (J.parseStackFrameList idsizes) (J.toLazy r)
 
+-- | Returns this thread's thread group.
 threadGroup :: (Error e, MonadIO m, MonadError e m)
             => ThreadReference -> VirtualMachine m ThreadGroupReference
 threadGroup tr@(ThreadReference _ ti) = do
@@ -920,6 +752,11 @@ threadGroup tr@(ThreadReference _ ti) = do
                     (J.toLazy r)
     threadGroupReferenceFromId groupId
 
+{- | Returns the thread's status. If the thread is not suspended the thread's
+current status is returned. If the thread is suspended, the thread's status
+before the suspension is returned is not available. isSuspended() can be used
+to determine if the thread has been suspended.
+-}
 status :: (Error e, MonadIO m, MonadError e m)
        => ThreadReference -> VirtualMachine m J.ThreadStatus
 status tr@(ThreadReference _ ti) = do
@@ -928,6 +765,7 @@ status tr@(ThreadReference _ ti) = do
     let (threadStatus, _) = runGet J.parseThreadStatusReply (J.toLazy r)
     return threadStatus
 
+-- | Determines whether the thread has been suspended by the the debugger.
 isSuspended :: (Error e, MonadIO m, MonadError e m)
             => ThreadReference -> VirtualMachine m Bool
 isSuspended tr@(ThreadReference _ ti) = do
@@ -940,6 +778,10 @@ isSuspended tr@(ThreadReference _ ti) = do
 
 -- ThreadGroupReference functions section {{{
 
+{- | A thread group object from the target VM. A 'ThreadGroupReference' is an
+'J.ObjectReference' with additional access to threadgroup-specific information
+from the target VM.
+-}
 data ThreadGroupReference = ThreadGroupReference String J.JavaThreadGroupId
                             deriving (Eq, Show)
 
@@ -952,60 +794,54 @@ threadGroupReferenceFromId refId = do
     let name = runGet J.parseString (J.toLazy r)
     return $ ThreadGroupReference name refId
 
-instance Name ThreadGroupReference where
-    name (ThreadGroupReference n _) = n
-
-parent :: (Error e, MonadIO m, MonadError e m)
-       => ThreadGroupReference -> VirtualMachine m ThreadGroupReference
-parent (ThreadGroupReference _ refId) = do
-    reply <- runCommand $ J.threadGroupReferenceParentCommand refId
-    let r = J.dat reply
-    idsizes <- getIdSizes
-    let parentId = runGet
-                    (J.parseThreadGroupId $ J.threadGroupIdSize idsizes)
-                    (J.toLazy r)
-    threadGroupReferenceFromId parentId
-
-threadGroups :: (Error e, MonadIO m, MonadError e m)
-             => ThreadGroupReference
-             -> VirtualMachine m [ThreadGroupReference]
-threadGroups (ThreadGroupReference _ refId) = do
-    reply <- runCommand $ J.threadGroupReferenceChildrenCommand refId
-    let r = J.dat reply
-    idsizes <- getIdSizes
-    let (_, groups) = runGet
-                        (J.parseThreadGroupChildrenReply idsizes)
-                        (J.toLazy r)
-    mapM threadGroupReferenceFromId groups
-
-threads :: (Error e, MonadIO m, MonadError e m)
-             => ThreadGroupReference
-             -> VirtualMachine m [ThreadReference]
-threads (ThreadGroupReference _ refId) = do
-    reply <- runCommand $ J.threadGroupReferenceChildrenCommand refId
-    let r = J.dat reply
-    idsizes <- getIdSizes
-    let (ts, _) = runGet
-                        (J.parseThreadGroupChildrenReply idsizes)
-                        (J.toLazy r)
-    mapM threadReferenceFromId ts
-
 -- }}}
 
 -- ObjectReference functions section {{{
 
+{- | Prevents garbage collection for this object. By default all ObjectReference
+values returned by JDI may be collected at any time the target VM is running.
+A call to this method guarantees that the object will not be collected.
+enableCollection() can be used to allow collection once again.
+
+Calls to this method are counted. Every call to this method requires a
+corresponding call to enableCollection() before garbage collection is
+re-enabled.
+
+Note that while the target VM is suspended, no garbage collection will occur
+because all threads are suspended. The typical examination of variables, fields,
+and arrays during the suspension is safe without explicitly disabling garbage
+collection.
+
+This method should be used sparingly, as it alters the pattern of garbage
+collection in the target VM and, consequently, may result in application
+behavior under the debugger that differs from its non-debugged behavior.
+-}
 disableCollection :: (Error e, MonadIO m, MonadError e m)
                   => J.ObjectReference -> VirtualMachine m ()
 disableCollection (J.ObjectReference refId) = do
     reply <- runCommand $ J.disableCollectionCommand refId
     return ()
 
+{- | Permits garbage collection for this object. By default all ObjectReference
+values returned by JDI may be collected at any time the target VM is running.
+A call to this method is necessary only if garbage collection was previously
+disabled with disableCollection().
+-}
 enableCollection :: (Error e, MonadIO m, MonadError e m)
                  => J.ObjectReference -> VirtualMachine m ()
 enableCollection (J.ObjectReference refId) = do
     reply <- runCommand $ J.enableCollectionCommand refId
     return ()
 
+{- | Returns the number times this object's monitor has been entered by the
+current owning thread. See ownedMonitors function of ThreadReference
+for a definition of ownership.
+
+Not all target VMs support this operation. See canGetMonitorInfo to determine
+if the operation is supported.
+
+Returns: the integer count of the number of entries.
+-}
 entryCount :: (Error e, MonadIO m, MonadError e m)
            => J.ObjectReference -> VirtualMachine m Int
 entryCount (J.ObjectReference refId) = do
@@ -1015,30 +851,12 @@ entryCount (J.ObjectReference refId) = do
     let (_, count, _) = runGet (J.parseMonitorInfoReply idsizes) (J.toLazy r)
     return $ fromIntegral count
 
-objGetValue :: (Error e, MonadIO m, MonadError e m)
-            => J.ObjectReference -> Field -> VirtualMachine m Value
-objGetValue (J.ObjectReference ri) (Field _ f) = do
-    reply <- runCommand $ J.objGetValuesCommand ri [f]
-    idsizes <- getIdSizes
-    return $ toJdiValue $ head $ runGet
-                        (J.parseGetValuesReply idsizes)
-                        (J.toLazy $ J.dat reply)
-
-objGetValues :: (Error e, MonadIO m, MonadError e m)
-             => J.ObjectReference -> [Field] -> VirtualMachine m [Value]
-objGetValues (J.ObjectReference ri) fs = do
-    reply <- runCommand $ J.objGetValuesCommand ri (map getFid fs)
-    idsizes <- getIdSizes
-    return $ map toJdiValue $ runGet (J.parseGetValuesReply idsizes)
-                             (J.toLazy $ J.dat reply)
-    where getFid (Field _ f) = f
-
-invokeMethod :: J.ObjectReference -- | object
-             -> ThreadReference -- | thread
-             -> Method -- | Method
-             -> [Value] -- | Arguments
-             -> Int -- | Options
-             -> Value -- | return value
+invokeMethod :: J.ObjectReference
+             -> ThreadReference
+             -> Method
+             -> [Value]
+             -> Int
+             -> Value
 invokeMethod = undefined
 
 isCollected :: J.ObjectReference -> VirtualMachine m Bool
@@ -1046,9 +864,6 @@ isCollected = undefined
 
 owningThread :: J.ObjectReference -> VirtualMachine m ThreadReference
 owningThread = undefined
-
-instance RefType J.ObjectReference where
-    referenceType = undefined
 
 referringObjects :: J.ObjectReference
                  -> Int
@@ -1072,135 +887,116 @@ waitingThreads = undefined
 
 -- Field functions section {{{
 
+{- | A class or instance variable in the target VM. See TypeComponent
+for general information about Field and Method mirrors.
+-}
 data Field = Field J.ReferenceType J.Field
               deriving (Eq, Show)
-
-instance Name Field  where
-    name (Field _ (J.Field _ nm _ _)) = nm
-
-instance Accessible Field where
-    isPackagePrivate f = not (isPrivate f)
-                      && not (isProtected f)
-                      && not (isPublic f)
-    isPrivate (Field _ (J.Field _ _ _ modbits))
-                                = (modbits .&. J.field_private) /= 0
-    isProtected (Field _ (J.Field _ _ _ modbits))
-                                = (modbits .&. J.field_protected) /= 0
-    isPublic (Field _ (J.Field _ _ _ modbits))
-                                = (modbits .&. J.field_public) /= 0
-    modifiers (Field _ (J.Field _ _ _ modbits)) = fromIntegral modbits
-
-instance DeclaringType Field where
-    declaringType (Field rt _) = rt
-
--- TODO needs implementation
-instance GenericSignature Field where
-    genericSignature (Field _ (J.Field _ _ sig _)) = undefined
-
-instance Signature Field where
-    signature (Field _ (J.Field _ _ sig _)) = sig
-
-instance TypeComponent Field where
-    isFinal (Field _ (J.Field _ _ _ modbits))
-                            = (J.field_final .&. modbits) /= 0
-    isStatic (Field _ (J.Field _ _ _ modbits))
-                            = (J.field_static .&. modbits) /= 0
-    isSynthetic (Field _ (J.Field _ _ _ modbits))
-                            = (J.field_synthetic .&. modbits) /= 0
 
 -- }}}
 
 -- Method functions section {{{
 
+{- | A static or instance method in the target VM. See TypeComponent for general
+information about Field and Method mirrors. -}
 data Method = Method J.ReferenceType J.Method
               deriving (Eq, Show)
 
-instance Name Method where
-    name (Method _ (J.Method _ name _ _)) = name
-
-instance AllLineLocations Method where
-    allLineLocations m@(Method ref method) = do
+methodAllLineLocations :: (Error e, MonadIO m, MonadError e m)
+                        => Method -> VirtualMachine m [Location]
+methodAllLineLocations m@(Method ref method) = do
         (J.LineTable _ _ lines) <- receiveLineTable m
         return $ map (Location ref method) lines
 
-instance Locatable Method where
-    location m@(Method ref method) = do
-        (J.LineTable _ _ lines) <- receiveLineTable m
-        return $ Location ref method (head lines)
-
-arguments :: (Error e, MonadIO m, MonadError e m) =>
-             Method -> VirtualMachine m [LocalVariable]
-arguments method = getVariables method (>)
-
-variables :: (Error e, MonadIO m, MonadError e m) =>
-             Method -> VirtualMachine m [LocalVariable]
-variables method = getVariables method (<=)
-
-variablesByName :: (Error e, MonadIO m, MonadError e m) =>
-                   Method -> String -> VirtualMachine m [LocalVariable]
-variablesByName method varName =
-    (filter ((varName ==) . name)) `liftM` (variables method)
-
-instance Accessible Method where
-    isPackagePrivate f = not (isPrivate f)
-                      && not (isProtected f)
-                      && not (isPublic f)
-    isPrivate (Method _ (J.Method _ _ _ modbits))
-                                = (modbits .&. J.method_private) /= 0
-    isProtected (Method _ (J.Method _ _ _ modbits))
-                                = (modbits .&. J.method_protected) /= 0
-    isPublic (Method _ (J.Method _ _ _ modbits))
-                                = (modbits .&. J.method_public) /= 0
-    modifiers (Method _ (J.Method _ _ _ modbits)) = fromIntegral modbits
-
-instance DeclaringType Method where
-    declaringType (Method rt _) = rt
-
--- TODO needs implementation
-instance GenericSignature Method where
-    genericSignature (Method _ (J.Method _ _ sig _)) = undefined
-
-instance Signature Method where
-    signature (Method _ (J.Method _ _ sig _)) = sig
-
-instance TypeComponent Method where
-    isFinal (Method _ (J.Method _ _ _ modbits))
-                            = (J.method_final .&. modbits) /= 0
-    isStatic (Method _ (J.Method _ _ _ modbits))
-                            = (J.method_static .&. modbits) /= 0
-    isSynthetic (Method _ (J.Method _ _ _ modbits))
-                            = (J.method_synthetic .&. modbits) /= 0
 -- }}}
 
 -- LocalVariable functions section {{{
 
+{- | A local variable in the target VM. Each variable declared within a Method
+has its own LocalVariable object. Variables of the same name declared in
+different scopes have different LocalVariable objects. LocalVariables can be
+used alone to retrieve static information about their declaration, or can be
+used in conjunction with a StackFrame to set and get values.
+-}
 data LocalVariable = LocalVariable J.ReferenceType J.Method J.Slot
                      deriving (Show, Eq)
 
-instance Name LocalVariable where
-    name (LocalVariable _ _ (J.Slot _ nm _ _ _)) = nm
+localVariableName :: LocalVariable -> String
+localVariableName (LocalVariable _ _ (J.Slot _ nm _ _ _)) = nm
 
 -- }}}
 
 -- Location functions section {{{
 
+{- | A point within the executing code of the target VM. Locations are used to
+identify the current position of a suspended thread (analogous to an instruction
+pointer or program counter register in native programs). They are also used to
+identify the position at which to set a breakpoint.
+
+The availability of a line number for a location will depend on the level of
+debugging information available from the target VM.
+
+Several mirror interfaces have locations. Each such mirror extends a Locatable
+interface.
+
+Strata
+
+The source information for a Location is dependent on the stratum which is used.
+A stratum is a source code level within a sequence of translations. For example,
+say the baz program is written in the programming language "Foo" then translated
+to the language "Bar" and finally translated into the Java programming language.
+The Java programming language stratum is named "Java", let's say the other
+strata are named "Foo" and "Bar". A given location (as viewed by the
+sourceName() and lineNumber() methods) might be at line 14 of "baz.foo" in the
+"Foo" stratum, line 23 of "baz.bar" in the "Bar" stratum and line 71 of the
+"Java" stratum. Note that while the Java programming language may have only one
+source file for a reference type, this restriction does not apply to other
+strata - thus each Location should be consulted to determine its source path.
+Queries which do not specify a stratum (sourceName(), sourcePath() and
+lineNumber()) use the VM's default stratum (VirtualMachine.getDefaultStratum()).
+If the specified stratum (whether explicitly specified by a method parameter or
+implicitly as the VM's default) is null or is not available in the declaring
+type, the declaring type's default stratum is used
+(declaringType().defaultStratum()). Note that in the normal case, of code that
+originates as Java programming language source, there will be only one stratum
+("Java") and it will be returned as the default. To determine the available
+strata use ReferenceType.availableStrata().
+
+Only default Java stratum is available in the current JDI version.
+-}
+
 data Location = Location J.ReferenceType J.Method J.Line
                 deriving (Show, Eq)
 
+{- | Gets the code position within this location's method.
+
+Returns: the Int representing the position within the method or -1 if location
+is within a native method.
+-}
 codeIndex :: Location -> Int
 codeIndex (Location _ _ (J.Line ci _)) = fromIntegral ci
 
-instance DeclaringType Location where
-    declaringType (Location rt _ _) = rt
+locationDeclaringType :: Location -> J.ReferenceType
+locationDeclaringType (Location rt _ _) = rt
 
+{- | Gets the line number of this Location.
+
+This method is equivalent to lineNumber(vm.getDefaultStratum()) - see
+lineNumber(String) for more information.
+
+Returns: an Int specifying the line in the source, returns -1 if the information
+is not available; specifically, always returns -1 for native methods.
+-}
 lineNumber :: Location -> Int
 lineNumber (Location _ _ (J.Line _ ln)) = fromIntegral ln
 
+-- | Gets the method containing this Location.
 method :: Location -> Method
 method (Location refType method _) = Method refType method
 
-instance SourceName Location where
-    sourceName (Location ref _ _) = sourceName ref
+locationSourceName :: (Error e, MonadIO m, MonadError e m)
+                   => Location -> VirtualMachine m String
+locationSourceName (Location (J.ReferenceType _ refId _ _) _ _) = sourceNameFromRefId refId
 
 -- }}}
 
@@ -1242,7 +1038,7 @@ locationFromJavaLocation (J.JavaLocation typeTag refId methodId index) = do
     rt <- referenceTypeFromRefId typeTag refId
     methodList <- methods rt
     let (Just method) = find isMyMethod methodList
-    al <- allLineLocations method
+    al <- methodAllLineLocations method
     return $ last $ filter (lessThanIndex index) al
     where
         isMyMethod (Method _ (J.Method id _ _ _)) = id == methodId
@@ -1291,6 +1087,13 @@ getVariables (Method
     where
         slot (J.Slot _ _ _ _ s) = s
 
+sourceNameFromRefId :: (Error e , MonadIO m, MonadError e m)
+                    => J.JavaReferenceTypeId -> VirtualMachine m String
+sourceNameFromRefId refId = do
+    reply <- runCommand $ J.sourceFileCommand refId
+    let r = J.dat reply
+    let sourceName = runGet J.parseString (J.toLazy r)
+    return sourceName
 -- }}}
 
 -- vim: foldmethod=marker foldmarker={{{,}}}

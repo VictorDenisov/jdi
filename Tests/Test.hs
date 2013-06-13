@@ -14,6 +14,7 @@ import qualified Language.Java.Jdi.ThreadReference as TR
 import qualified Language.Java.Jdi.ThreadGroupReference as TG
 import qualified Language.Java.Jdi.ObjectReference as OR
 import qualified Language.Java.Jdi.Method as M
+import qualified Language.Java.Jdi.Field as F
 import qualified Language.Java.Jdi.Location as L
 
 import Network.Socket.Internal (PortNumber(..))
@@ -43,11 +44,11 @@ body = do
     liftIO . putStrLn $ show rd
 
     pollEvents $ \e -> case E.eventKind e of
-        E.ClassPrepare -> isMainClass $ referenceType e
+        E.ClassPrepare -> isMainClass $ E.referenceType e
         _ -> False
 
     classes <- Vm.allClasses
-    let cNames = map name classes
+    let cNames = map RT.name classes
     liftIO . putStrLn $ intercalate "\n" cNames
     threads <- Vm.allThreads
     liftIO . putStrLn $ intercalate "\n" (map show threads)
@@ -66,10 +67,10 @@ body = do
 
     checkFieldsNames fields
     liftIO . putStrLn $ "Main class fields: " ++ show fields
-    liftIO . putStrLn $ "Main class fields static: " ++ (show $ map isStatic fields)
-    liftIO . putStrLn $ "Main class fields public: " ++ (show $ map isPublic fields)
-    liftIO . putStrLn $ "Main class fields private: " ++ (show $ map isPrivate fields)
-    sName <- sourceName mainClass
+    liftIO . putStrLn $ "Main class fields static: " ++ (show $ map F.isStatic fields)
+    liftIO . putStrLn $ "Main class fields public: " ++ (show $ map F.isPublic fields)
+    liftIO . putStrLn $ "Main class fields private: " ++ (show $ map F.isPrivate fields)
+    sName <- RT.sourceName mainClass
     liftIO . putStrLn $ "Main class source name: " ++ sName
     mainClassInterfaces <- RT.interfaces mainClass
 
@@ -85,13 +86,13 @@ body = do
     liftIO . putStrLn $ "Methods for class " ++ (show mainClass)
     liftIO . putStrLn $ intercalate "\n" (map show methods)
     liftIO . putStrLn =<< Vm.name
-    liftIO . putStrLn $ name $ head methods
-    forM_ threads (\thread -> liftIO . putStrLn $ name thread)
-    let isMainMethod = ("main" ==) . name
-    let isRunMethod = ("run" ==) . name
+    liftIO . putStrLn $ M.name $ head methods
+    forM_ threads (\thread -> liftIO . putStrLn $ TR.name thread)
+    let isMainMethod = ("main" ==) . M.name
+    let isRunMethod = ("run" ==) . M.name
     let methodMain = head $ filter isMainMethod methods
     let runMethod = head $ filter isRunMethod methods
-    let isAnotherMethod = ("anotherMethod" ==) . name
+    let isAnotherMethod = ("anotherMethod" ==) . M.name
     let anotherMethod = head $ filter isAnotherMethod methods
     liftIO . putStrLn $ "Variables of method anotherMethod: " ++ (show anotherMethod)
     do
@@ -119,12 +120,12 @@ body = do
      `catchError`
             (\ee -> liftIO $ putStrLn $ "error during arguments: " ++ (show ee))
     liftIO . putStrLn $ "Printing line table"
-    lineTable <- allLineLocations methodMain
+    lineTable <- M.allLineLocations methodMain
     liftIO . putStrLn $ "After line table"
-    mainLocation <- location methodMain
-    runLocation <- location runMethod
+    mainLocation <- M.location methodMain
+    runLocation <- M.location runMethod
     liftIO . putStrLn $ intercalate "\n" (map show lineTable)
-    classLineLocations <- allLineLocations mainClass
+    classLineLocations <- RT.allLineLocations mainClass
     liftIO . putStrLn $ intercalate "\n" (map show classLineLocations)
     liftIO . putStrLn $ "Enabling breakpoint request"
     bpr <- ER.enable $ ER.createBreakpointRequest mainLocation
@@ -135,7 +136,7 @@ body = do
     printThreadTree
     liftIO . putStrLn $ "breakpoint stopped at location"
     liftIO . putStrLn $ show methodMain
-    loc <- location ev
+    loc <- E.location ev
     liftIO . putStrLn $ show loc
     liftIO . putStrLn $ "Values of args"
 
@@ -146,7 +147,7 @@ body = do
     case mainArgsValue of
         V.ArrayValue arrV -> do
             (V.StringValue aV) <- AR.getValue arrV 0
-            sV <- SR.stringValue aV
+            sV <- SR.value aV
             liftIO $ putStrLn sV
         otherwise  -> liftIO $ putStrLn "Not array value"
 
@@ -221,14 +222,14 @@ printThreadTree = do
 printThreadGroup depth tg = do
     let is = "   "
     let indent = concat $ replicate depth is
-    let tgName = name tg
+    let tgName = TG.name tg
     liftIO $ putStrLn $ indent ++ "Thread group: " ++ tgName
 
     liftIO $ putStrLn $ indent ++ is ++ "Threads: "
     trds <- TG.threads tg
     tstats <- mapM ((show <$>) . TR.status) trds
     tsusps <- mapM ((show <$>) . TR.isSuspended) trds
-    let ts = map name trds
+    let ts = map TR.name trds
     let threadStrings = zipWith3 (\a b c -> a ++ " " ++ b ++ " " ++ c) ts tstats tsusps
     liftIO $ putStrLn $ intercalate "\n" $ map ((indent ++ is ++ is) ++ ) threadStrings
 
@@ -237,9 +238,9 @@ printThreadGroup depth tg = do
 
 checkFieldsNames fields = do
     when (length fields /= 3) $ liftIO exitFailure
-    let f1name = name (fields !! 0)
-    let f2name = name (fields !! 1)
-    let f3name = name (fields !! 2)
+    let f1name = F.name (fields !! 0)
+    let f2name = F.name (fields !! 1)
+    let f3name = F.name (fields !! 2)
     when (f1name /= "f1") $ liftIO exitFailure
     when (f2name /= "fprivate") $ liftIO exitFailure
     when (f3name /= "args") $ liftIO exitFailure
@@ -254,7 +255,7 @@ checkFieldValues fieldValues = do
 
 intValue (V.IntValue v) = v
 
-strValue (V.StringValue sv) = SR.stringValue sv
+strValue (V.StringValue sv) = SR.value sv
 
 getValueOfI curThread = do
     frCnt <- TR.frameCount curThread
@@ -264,7 +265,7 @@ getValueOfI curThread = do
     liftIO $ putStrLn "Individual frames"
     indFrames <- sequence [TR.frame curThread x | x <- [0..(frCnt - 1)]]
     liftIO $ putStrLn $ show indFrames
-    loc <- location fr
+    loc <- SF.location fr
     liftIO $ putStrLn $ show loc
     var <- head <$> M.variablesByName (L.method loc) "i"
     liftIO $ putStrLn $ show var
@@ -279,4 +280,4 @@ pollEvents stopFunction = do
         then return e
         else pollEvents stopFunction
 
-isMainClass ref = "LMain;" == signature ref
+isMainClass ref = "LMain;" == RT.signature ref

@@ -1,3 +1,14 @@
 Implementation of Java Debug Interface in Haskell.
 
 Current implementation only works with Java stratum as default.
+
+Right now some of functions are located in Impl module some functions are
+located in corresponding modules like ReferenceType and Field.
+
+This is an intermediate state and majority of functions are in Impl module
+whereas they are supposed to be each in its corresponding module. However there
+is a number of functions that can't be put in the modules because they are used
+by several modules and GHC doesn't allow dependency loops. That is why some
+functions will stay in Impl module.
+
+vim: textwidth=80 cc=+1
